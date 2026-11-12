@@ -49,10 +49,11 @@ TestResults/
 *.coverage
 coverage/
 
-# OS
+# OS and developer tool configs
 .DS_Store
 Thumbs.db
 desktop.ini
+.swiftbar.json
 
 # Локальные портативные бинарники Tsukiko и архивы
 tools/tsukiko/
@@ -63,3 +64,5 @@ models/*.bin
 
 # AI / IDE tooling local artifacts
 .antigravity/
+.memory_bank/
+.agent/

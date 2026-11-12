@@ -40,4 +40,4 @@
 ## 3. Проверенные артефакты данных и документации
 
 - **БД и Seed:** [`infra/postgres/init/02_schema.sql`](infra/postgres/init/02_schema.sql) (все даты в `TIMESTAMPTZ`, добавлены таблица `audit_events`, поля протокола `proposed`, `discussed`, `risks`, `requires_clarification`, `status` и `source_quote` у `action_items`) и [`infra/postgres/init/03_seed_data.sql`](infra/postgres/init/03_seed_data.sql) (20 документов с разными `allowed_access_groups`, 3 встречи с расшифровками и задачами-сиротами, 5 тестовых ролей включая `Employee` `100005`, домен `@fotoprint.by`, расчёты в `BYN`).
-- **Лицензии и контракты:** [`libraries.yaml`](libraries.yaml), [`docs/openapi.yaml`](docs/openapi.yaml), [`docs/formulas.md`](docs/formulas.md), [`access.md`](access.md), [`README.md`](README.md).
+- **Лицензии и контракты:** [`libraries.yaml`](../libraries.yaml), [`openapi.yaml`](openapi.yaml), [`formulas.md`](formulas.md), [`access.md`](access.md), [`README.md`](../README.md).

@@ -1,0 +1,6 @@
+@Fotoprint.Mcp.OneC_HostAddress = http://localhost:5270
+
+GET {{Fotoprint.Mcp.OneC_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

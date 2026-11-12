@@ -1,0 +1,199 @@
+{
+  "name": "04_Live_Meeting_Copilot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "live-meeting-copilot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Live Copilot Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "node-live-trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = ($json.body.text || '').toLowerCase();\nlet mode = 'factcheck'; // 'secretary' or 'factcheck'\n\nif (text.includes('зафиксируй') || text.includes('решили') || text.includes('поручение') || text.includes('запиши в протокол')) {\n  mode = 'secretary';\n}\n\nreturn [{\n  json: {\n    mode: mode,\n    text: $json.body.text,\n    user_id: $json.body.user_id,\n    meeting_id: $json.body.meeting_id || 'bbbbbbb1-bbbb-bbbb-bbbb-bbbbbbbbbbbb',\n    trace_id: $json.body.trace_id\n  }\n}];"
+      },
+      "name": "Determine Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "id": "node-determine-intent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.mode }}",
+              "value2": "secretary"
+            }
+          ]
+        }
+      },
+      "name": "Is Secretary Note?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "id": "node-if-sec"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text;\nlet category = 'discussion';\nif (text.toLowerCase().includes('решили')) category = 'decision';\nif (text.toLowerCase().includes('поручение')) category = 'action_point';\n\nreturn [{\n  json: {\n    status: 'recorded',\n    category: category,\n    note: text,\n    response_text: `✍️ Зафиксировано в буфер встречи (${category}): \"${text}\"`\n  }\n}];"
+      },
+      "name": "Save Secretary Note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ],
+      "id": "node-save-note"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-1c:8082/tools/get_order_status?order_id=44102",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-Id",
+              "value": "100001"
+            },
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Factcheck: Query 1C",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        420
+      ],
+      "id": "node-factcheck-1c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const order = $json;\nconst msg = `⚡ Фактчекинг по тиражу №44102 из 1С:\\n` +\n  `• Клиент: ${order.client}\\n` +\n  `• Текущий этап: ${order.current_stage}\\n` +\n  `• Готовность: ${order.readiness_percent}%\\n` +\n  `• Плановая отгрузка: ${order.planned_delivery}\\n` +\n  `• Предупреждения: ${order.alerts && order.alerts.length > 0 ? order.alerts[0] : 'Штатный режим'}`;\n\nreturn [{\n  json: {\n    status: 'answered',\n    response_text: msg,\n    data: order\n  }\n}];"
+      },
+      "name": "Format Factcheck Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        420
+      ],
+      "id": "node-format-factcheck"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Copilot Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        300
+      ],
+      "id": "node-respond-copilot"
+    }
+  ],
+  "connections": {
+    "Live Copilot Trigger": {
+      "main": [
+        [
+          {
+            "node": "Determine Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Intent": {
+      "main": [
+        [
+          {
+            "node": "Is Secretary Note?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Secretary Note?": {
+      "main": [
+        [
+          {
+            "node": "Save Secretary Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Factcheck: Query 1C",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Secretary Note": {
+      "main": [
+        [
+          {
+            "node": "Return Copilot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Factcheck: Query 1C": {
+      "main": [
+        [
+          {
+            "node": "Format Factcheck Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Factcheck Response": {
+      "main": [
+        [
+          {
+            "node": "Return Copilot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

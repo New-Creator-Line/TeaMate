@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="liquid-glass">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fotoprint AI Copilot — Apple Liquid Glass &amp; VisionOS</title>
+  <link rel="stylesheet" href="themes/theme-liquid-glass.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Floating CSS Ambient Mesh Aura Spheres (Apple Liquid Glass Depth) -->
+  <div class="ambient-aura" aria-hidden="true">
+    <div class="ambient-aura-sphere ambient-aura-1"></div>
+    <div class="ambient-aura-sphere ambient-aura-2"></div>
+    <div class="ambient-aura-sphere ambient-aura-3"></div>
+  </div>
+
+  <!-- Top Glass Navigation Bar -->
+  <header>
+    <div class="brand">
+      <div class="logo-container" aria-hidden="true">
+        <i data-lucide="printer"></i>
+      </div>
+      <div class="title-group">
+        <h1>Fotoprint AI Copilot</h1>
+        <div class="model-badge">
+          <div class="pulse" aria-hidden="true"></div>
+          <span>NVIDIA Nemotron-3.5 120B &amp; Whisper STT</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Theme Switcher -->
+      <div class="theme-switcher" title="Стиль оформления интерфейса">
+        <label for="theme-select"><i data-lucide="palette"></i></label>
+        <select id="theme-select" onchange="switchTheme(this.value)">
+          <option value="liquid-glass" selected>Apple Liquid Glass</option>
+          <option value="amber">Business Noir &amp; Amber</option>
+          <option value="obsidian">Linear Obsidian Pro</option>
+        </select>
+      </div>
+
+      <!-- Calendar Toggle Button -->
+      <button type="button" id="calendar-toggle-btn" class="nav-btn calendar-btn" onclick="toggleCalendarDrawer()" title="Открыть расписание и встречи">
+        <i data-lucide="calendar"></i>
+        <span>Календарь</span>
+        <span id="calendar-today-badge" class="calendar-badge" title="Встреч на сегодня">0</span>
+      </button>
+
+      <!-- RBAC User Switcher -->
+      <div class="user-switcher" title="Переключение пользователя и роли RBAC">
+        <label for="user-select"><i data-lucide="user"></i> <span>Юзер:</span></label>
+        <select id="user-select" onchange="onUserChange()"></select>
+        <span id="role-badge" class="role-badge">Director</span>
+      </div>
+    </div>
+
+    <!-- External Navigation Links -->
+    <nav class="nav-links" aria-label="Внешние сервисы">
+      <a href="http://localhost:5678" target="_blank" rel="noopener noreferrer" class="nav-btn" title="n8n Оркестратор">
+        <i data-lucide="workflow"></i>
+        <span>n8n</span>
+      </a>
+      <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer" class="nav-btn" title="Langfuse Трейсинг">
+        <i data-lucide="activity"></i>
+        <span>Langfuse</span>
+      </a>
+      <a href="/api/system/stats" target="_blank" rel="noopener noreferrer" class="nav-btn" title="Метрики системы">
+        <i data-lucide="gauge"></i>
+        <span>Метрики</span>
+      </a>
+    </nav>
+  </header>
+
+  <!-- Main Chat & Interaction Area -->
+  <main>
+    <div id="chat-window" class="chat-history">
+      <div class="msg-row bot">
+        <div class="avatar" aria-hidden="true"><i data-lucide="bot"></i></div>
+        <div class="msg-content">
+          Здравствуйте! Я — корпоративный ассистент типографии «Фотопринт», работающий на нейросети <strong>NVIDIA Nemotron 3.5 120B</strong>.<br><br>
+          Я могу проверить статус тиража в 1С, рассчитать выработку машин Heidelberg, проверить задачи и сделки в Битрикс24, посмотреть планерки в календаре или подсказать технологический регламент.<br><br>
+          Для голосовых сценариев доступны кнопки голосового ввода с микрофона и загрузки аудиозаписи совещания для протокола MoM.
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Prompts Capsules -->
+    <div class="quick-prompts">
+      <button type="button" class="pill" onclick="sendPrompt('Какой статус заказа 44102?')">
+        <i data-lucide="package"></i>
+        <span>Статус заказа 44102</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Покажи выработку и KPI офсетного цеха')">
+        <i data-lucide="trending-up"></i>
+        <span>KPI цеха</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какие у меня задачи в Битрикс24?')">
+        <i data-lucide="check-square"></i>
+        <span>Мои задачи Битрикс24</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какие планерки запланированы на ближайший час?')">
+        <i data-lucide="calendar"></i>
+        <span>Планерки</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какая норма брака для печатной машины Heidelberg?')">
+        <i data-lucide="book-open"></i>
+        <span>Нормы брака</span>
+      </button>
+      <button type="button" class="pill" onclick="triggerAudioUpload()">
+        <i data-lucide="paperclip"></i>
+        <span>Загрузить аудио встречи (MoM)</span>
+      </button>
+    </div>
+
+    <!-- STT Status Badge -->
+    <div id="stt-status-badge" class="stt-badge" role="status" aria-live="polite" style="display: none;"></div>
+
+    <!-- Input Bar & Voice Recording Bar -->
+    <div class="input-area-wrapper">
+      <div class="input-bar" id="input-bar">
+        <!-- Hidden file input for meeting audio -->
+        <input type="file" id="audio-file-input" accept="audio/*,.m4a,.wav,.mp3,.ogg,.oga" style="display: none;" onchange="handleAudioUpload(this)">
+
+        <!-- Attachment button for meeting recording -->
+        <button type="button" class="btn-icon" id="attach-audio-btn" aria-label="Загрузить аудиозапись встречи" title="Загрузить аудиозапись встречи (.m4a, .wav, .mp3, .ogg)" onclick="triggerAudioUpload()">
+          <i data-lucide="paperclip"></i>
+        </button>
+
+        <!-- Microphone button for voice input -->
+        <button type="button" class="btn-icon" id="voice-toggle-btn" aria-label="Голосовой ввод с микрофона" title="Голосовой ввод (Микрофон)" onclick="toggleRecording()">
+          <i data-lucide="mic"></i>
+        </button>
+
+        <label for="prompt-input" class="visually-hidden">Сообщение ассистенту</label>
+        <input type="text" id="prompt-input" placeholder="Введите ваш вопрос по производству, заказам или регламентам..." autofocus>
+        <button type="button" id="send-btn" onclick="handleSend()">
+          <i data-lucide="send"></i>
+          <span>Отправить</span>
+        </button>
+      </div>
+
+      <!-- ChatGPT-style Liquid Voice Bar with Glowing Waveform -->
+      <div class="voice-bar" id="voice-bar" style="display: none;">
+        <button type="button" class="btn-voice-cancel" id="voice-cancel-btn" aria-label="Отменить запись аудио" title="Отменить запись (Esc)" onclick="cancelRecording()">
+          <i data-lucide="x"></i>
+        </button>
+
+        <div class="voice-timer-badge" title="Идет запись аудио">
+          <span class="voice-rec-dot" aria-hidden="true"></span>
+          <span id="voice-timer">00:00</span>
+          <span id="record-timer" style="display: none;">00:00</span>
+        </div>
+
+        <div class="voice-waveform-container">
+          <canvas id="voice-waveform" aria-label="Индикатор уровня звука записи"></canvas>
+        </div>
+
+        <button type="button" class="btn-voice-done" id="voice-done-btn" aria-label="Остановить запись и распознать речь" title="Готово (Enter)" onclick="stopRecordingAndSend()">
+          <i data-lucide="check"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Slide-Over Calendar Drawer & Frosted Backdrop -->
+  <div id="drawer-backdrop" class="drawer-backdrop" onclick="toggleCalendarDrawer(false)"></div>
+  <aside id="calendar-drawer" class="calendar-drawer" aria-label="Календарь встреч">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <i data-lucide="calendar"></i>
+        <span>Календарь встреч</span>
+      </div>
+      <button type="button" class="drawer-close-btn" onclick="toggleCalendarDrawer(false)" aria-label="Закрыть календарь">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <!-- RBAC Calendar Scope Bar -->
+    <div class="calendar-scope-bar">
+      <button type="button" id="scope-my-btn" class="scope-btn active" onclick="setCalendarScope('my')">
+        <i data-lucide="user"></i>
+        <span>Мои встречи</span>
+      </button>
+      <button type="button" id="scope-all-btn" class="scope-btn" onclick="setCalendarScope('all')" title="Доступно только генеральному директору">
+        <i data-lucide="building"></i>
+        <span>Вся компания</span>
+        <span class="lock-icon" id="scope-lock-icon"><i data-lucide="lock"></i></span>
+      </button>
+    </div>
+
+    <!-- Month Navigation -->
+    <div class="month-navigation">
+      <button type="button" class="nav-arrow" onclick="changeMonth(-1)" aria-label="Предыдущий месяц">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      <span id="current-month-label" class="month-label">Ноябрь 2026</span>
+      <button type="button" class="nav-arrow" onclick="changeMonth(1)" aria-label="Следующий месяц">
+        <i data-lucide="chevron-right"></i>
+      </button>
+    </div>
+
+    <!-- Calendar Grid Headers & Days Grid -->
+    <div class="calendar-grid-header">
+      <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+    </div>
+    <div id="calendar-days-grid" class="calendar-days-grid"></div>
+
+    <!-- Day Details Panel -->
+    <div class="day-details-panel">
+      <div id="selected-day-title" class="day-title">
+        <i data-lucide="clock"></i>
+        <span>Встречи на выбранный день:</span>
+      </div>
+      <div id="day-meetings-list" class="meetings-list">
+        <div class="no-meetings">Загрузка встреч...</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Client-side Application Script -->
+  <script>
+    // ========================================================================
+    // DOM ELEMENTS & SHARED STATE
+    // ========================================================================
+    const chatWindow = document.getElementById('chat-window');
+    const input = document.getElementById('prompt-input');
+    const sendBtn = document.getElementById('send-btn');
+    const userSelect = document.getElementById('user-select');
+    const roleBadge = document.getElementById('role-badge');
+    const calendarDrawer = document.getElementById('calendar-drawer');
+    const drawerBackdrop = document.getElementById('drawer-backdrop');
+    const calendarTodayBadge = document.getElementById('calendar-today-badge');
+
+    const FALLBACK_USERS = [
+      { telegram_id: 100001, full_name: 'Смирнов Алексей Сергеевич', department: 'Руководство', position: 'Генеральный директор', roles: ['Director'], permissions: [] },
+      { telegram_id: 100002, full_name: 'Кузнецов Иван Петрович', department: 'Производство', position: 'Начальник производства', roles: ['Production'], permissions: [] },
+      { telegram_id: 100003, full_name: 'Морозова Елена Алексеевна', department: 'Продажи', position: 'Руководитель отдела продаж', roles: ['Sales'], permissions: [] },
+      { telegram_id: 100004, full_name: 'Соколова Ольга Викторовна', department: 'Бухгалтерия', position: 'Главный бухгалтер', roles: ['Accounting'], permissions: [] }
+    ];
+    const GUEST_TEST_USER = {
+      telegram_id: 999999,
+      full_name: 'Неизвестный гость (тест 403)',
+      department: 'Внешний',
+      position: 'Без доступа',
+      roles: ['Guest'],
+      permissions: []
+    };
+
+    let availableUsers = [];
+    let currentTelegramId = Number(localStorage.getItem('fotoprint_telegram_id')) || 100001;
+
+    // Calendar state
+    let currentCalendarDate = new Date(2026, 10, 12); // Default: November 12, 2026
+    let selectedCalendarDate = new Date(2026, 10, 12);
+    let currentCalendarScope = 'my';
+    let cachedCalendarEvents = [];
+
+    // Helper: Escape HTML strings to prevent XSS
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function triggerAudioUpload() {
+      const fi = document.getElementById('audio-file-input');
+      if (fi) fi.click();
+    }
+
+    function switchTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('fotoprint_theme', theme);
+      if (theme === 'amber') {
+        window.location.href = 'index-amber.html';
+      } else if (theme === 'obsidian') {
+        window.location.href = 'index-obsidian.html';
+      } else if (theme === 'liquid-glass') {
+        window.location.href = 'index-glass.html';
+      }
+    }
+
+    // ========================================================================
+    // RBAC & USER SELECTION
+    // ========================================================================
+    function getCurrentUser() {
+      return availableUsers.find(u => u.telegram_id === currentTelegramId) || availableUsers[0] || FALLBACK_USERS[0];
+    }
+
+    function updateRoleBadge(user) {
+      const role = (user.roles && user.roles[0]) ? user.roles[0] : 'Guest';
+      roleBadge.textContent = role;
+      roleBadge.className = 'role-badge';
+      if (role === 'Guest') {
+        roleBadge.classList.add('guest');
+      } else if (role !== 'Director') {
+        roleBadge.classList.add('restricted');
+      }
+      const permsHint = user.permissions && user.permissions.length > 0
+        ? user.permissions.join(', ')
+        : (role === 'Director' ? 'Полный доступ' : 'Нет прав в БД');
+      roleBadge.title = `${user.full_name} (${user.position})\nПрава: ${permsHint}`;
+
+      updateCalendarRbacUI();
+    }
+
+    function renderUsers(users) {
+      availableUsers = [...users, GUEST_TEST_USER];
+      userSelect.innerHTML = '';
+      for (const u of availableUsers) {
+        const opt = document.createElement('option');
+        opt.value = String(u.telegram_id);
+        const role = (u.roles && u.roles[0]) ? u.roles[0] : 'Guest';
+        opt.textContent = `${u.full_name} — ${role} (${u.telegram_id})`;
+        userSelect.appendChild(opt);
+      }
+      const exists = availableUsers.some(u => u.telegram_id === currentTelegramId);
+      if (!exists) currentTelegramId = availableUsers[0].telegram_id;
+      userSelect.value = String(currentTelegramId);
+      updateRoleBadge(getCurrentUser());
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/agent/users');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users && data.users.length > 0) {
+            renderUsers(data.users);
+            return;
+          }
+        }
+      } catch (_) {}
+      renderUsers(FALLBACK_USERS);
+    }
+
+    function onUserChange() {
+      currentTelegramId = Number(userSelect.value);
+      localStorage.setItem('fotoprint_telegram_id', String(currentTelegramId));
+      const user = getCurrentUser();
+      updateRoleBadge(user);
+
+      const notice = document.createElement('div');
+      notice.className = 'system-notice';
+      const role = (user.roles && user.roles[0]) ? user.roles[0] : 'Guest';
+      notice.innerHTML = `<i data-lucide="refresh-cw"></i> <span>Пользователь: ${escapeHtml(user.full_name)} (${role}, ID ${user.telegram_id})</span>`;
+      chatWindow.appendChild(notice);
+      if (window.lucide) lucide.createIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      refreshCalendarEvents();
+    }
+
+    // ========================================================================
+    // CALENDAR DRAWER, RBAC & RENDERING
+    // ========================================================================
+    function updateCalendarRbacUI() {
+      const user = getCurrentUser();
+      const isDirector = user.roles && (user.roles.includes('Director') || user.roles.includes('Admin'));
+      const scopeAllBtn = document.getElementById('scope-all-btn');
+      const lockIcon = document.getElementById('scope-lock-icon');
+
+      if (!scopeAllBtn) return;
+
+      if (isDirector) {
+        scopeAllBtn.classList.remove('disabled');
+        scopeAllBtn.removeAttribute('disabled');
+        scopeAllBtn.title = 'Просмотр расписания всей компании';
+        if (lockIcon) lockIcon.style.display = 'none';
+      } else {
+        scopeAllBtn.classList.add('disabled');
+        scopeAllBtn.setAttribute('disabled', 'true');
+        scopeAllBtn.title = 'Доступно только руководству (роль Director)';
+        if (lockIcon) lockIcon.style.display = 'inline-flex';
+        if (currentCalendarScope === 'all') {
+          setCalendarScope('my');
+        }
+      }
+    }
+
+    function toggleCalendarDrawer(forceOpen) {
+      const isOpen = calendarDrawer.classList.contains('open');
+      const nextState = (typeof forceOpen === 'boolean') ? forceOpen : !isOpen;
+
+      if (nextState) {
+        calendarDrawer.classList.add('open');
+        drawerBackdrop.classList.add('open');
+        refreshCalendarEvents();
+      } else {
+        calendarDrawer.classList.remove('open');
+        drawerBackdrop.classList.remove('open');
+      }
+    }
+
+    function setCalendarScope(scope) {
+      if (scope === 'all') {
+        const user = getCurrentUser();
+        const isDirector = user.roles && (user.roles.includes('Director') || user.roles.includes('Admin'));
+        if (!isDirector) return;
+      }
+
+      currentCalendarScope = scope;
+      document.getElementById('scope-my-btn').classList.toggle('active', scope === 'my');
+      document.getElementById('scope-all-btn').classList.toggle('active', scope === 'all');
+      refreshCalendarEvents();
+    }
+
+    function changeMonth(delta) {
+      currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+      renderCalendarGrid();
+      refreshCalendarEvents();
+    }
+
+    const MONTH_NAMES = [
+      'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    ];
+
+    function renderCalendarGrid() {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const monthLabel = document.getElementById('current-month-label');
+      if (monthLabel) {
+        monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
+      }
+
+      const grid = document.getElementById('calendar-days-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+
+      let startingDay = firstDay.getDay() - 1; // 0=Mon, 6=Sun
+      if (startingDay === -1) startingDay = 6;
+
+      const totalDays = lastDay.getDate();
+      const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+      // Days from previous month
+      for (let i = startingDay - 1; i >= 0; i--) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell other-month';
+        cell.innerHTML = `<span>${prevMonthLastDay - i}</span>`;
+        grid.appendChild(cell);
+      }
+
+      const todayStr = '2026-11-12';
+
+      // Current month days
+      for (let day = 1; day <= totalDays; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell';
+
+        const dayDate = new Date(year, month, day);
+        const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        if (isoDate === todayStr) {
+          cell.classList.add('today');
+        }
+
+        if (selectedCalendarDate &&
+            selectedCalendarDate.getFullYear() === year &&
+            selectedCalendarDate.getMonth() === month &&
+            selectedCalendarDate.getDate() === day) {
+          cell.classList.add('selected');
+        }
+
+        // Check scheduled meetings for this date
+        const dayMeetings = cachedCalendarEvents.filter(ev => {
+          if (!ev.start_time) return false;
+          return ev.start_time.startsWith(isoDate);
+        });
+
+        let dotsHtml = '';
+        if (dayMeetings.length > 0) {
+          dotsHtml = '<div class="day-dots">';
+          if (dayMeetings.length <= 2) {
+            dotsHtml += '<span class="dot dot-green" title="Свободный график (1-2 встречи)"></span>';
+          } else if (dayMeetings.length <= 4) {
+            dotsHtml += '<span class="dot dot-amber" title="Умеренная занятость (3-4 встречи)"></span>';
+          } else {
+            dotsHtml += '<span class="dot dot-red" title="Высокая плотность (5+ встреч)"></span>';
+          }
+          dotsHtml += '</div>';
+        }
+
+        cell.innerHTML = `
+          <span>${day}</span>
+          ${dotsHtml}
+        `;
+
+        cell.onclick = () => {
+          selectedCalendarDate = new Date(year, month, day);
+          grid.querySelectorAll('.calendar-day-cell').forEach(c => c.classList.remove('selected'));
+          cell.classList.add('selected');
+          renderSelectedDayMeetings(isoDate, dayMeetings);
+        };
+
+        grid.appendChild(cell);
+      }
+
+      // Fill remaining cells for 6 complete rows (42 cells)
+      const currentCellCount = startingDay + totalDays;
+      const remainingCells = (currentCellCount > 35 ? 42 : 35) - currentCellCount;
+      for (let d = 1; d <= remainingCells; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell other-month';
+        cell.innerHTML = `<span>${d}</span>`;
+        grid.appendChild(cell);
+      }
+
+      // Initial render for selected day
+      const selIso = `${selectedCalendarDate.getFullYear()}-${String(selectedCalendarDate.getMonth() + 1).padStart(2, '0')}-${String(selectedCalendarDate.getDate()).padStart(2, '0')}`;
+      const selMeetings = cachedCalendarEvents.filter(ev => ev.start_time && ev.start_time.startsWith(selIso));
+      renderSelectedDayMeetings(selIso, selMeetings);
+    }
+
+    function renderSelectedDayMeetings(isoDate, meetings) {
+      const titleEl = document.getElementById('selected-day-title');
+      const listEl = document.getElementById('day-meetings-list');
+      if (!titleEl || !listEl) return;
+
+      const dateParts = isoDate.split('-');
+      const dNum = Number(dateParts[2]);
+      const mIdx = Number(dateParts[1]) - 1;
+      const yNum = dateParts[0];
+
+      titleEl.innerHTML = `
+        <i data-lucide="clock"></i>
+        <span>Встречи на ${dNum} ${MONTH_NAMES[mIdx]} ${yNum}:</span>
+      `;
+
+      if (!meetings || meetings.length === 0) {
+        listEl.innerHTML = '<div class="no-meetings">На этот день запланированных встреч нет.</div>';
+        if (window.lucide) lucide.createIcons();
+        return;
+      }
+
+      listEl.innerHTML = meetings.map(m => {
+        let startTimeStr = '';
+        let endTimeStr = '';
+        try {
+          if (m.start_time) {
+            const st = new Date(m.start_time);
+            startTimeStr = st.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+          }
+          if (m.end_time) {
+            const et = new Date(m.end_time);
+            endTimeStr = ' – ' + et.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+          }
+        } catch (_) {}
+
+        return `
+          <div class="meeting-item">
+            <div class="meeting-item-time">
+              <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+              <span>${escapeHtml(startTimeStr + endTimeStr || 'Время не указано')}</span>
+            </div>
+            <div class="meeting-item-title">${escapeHtml(m.title || 'Совещание')}</div>
+            <div class="meeting-item-participants">
+              ${m.description ? escapeHtml(m.description) : 'Организатор: ' + (m.organizer_id === 1 ? 'Смирнов А.С.' : 'Сотрудник ID ' + m.organizer_id)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function refreshCalendarEvents() {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const startDate = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+      const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59)).toISOString().slice(0, 10);
+
+      const user = getCurrentUser();
+      const employeeId = user.telegram_id === 100001 ? 1 : (user.telegram_id === 100002 ? 2 : (user.telegram_id === 100003 ? 3 : 4));
+
+      try {
+        const query = new URLSearchParams({
+          start_date: startDate,
+          end_date: endDate,
+          employee_id: String(employeeId),
+          scope: currentCalendarScope
+        });
+
+        const res = await fetch(`/api/calendar/events?${query.toString()}`, {
+          headers: {
+            'X-Telegram-Id': String(currentTelegramId)
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          cachedCalendarEvents = data.events || [];
+        } else if (res.status === 403) {
+          cachedCalendarEvents = [];
+          if (currentCalendarScope === 'all') {
+            setCalendarScope('my');
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Calendar events load error, using fallback simulated events', err);
+      }
+
+      // Update today badge count
+      const todayIso = '2026-11-12';
+      const todayMeetings = cachedCalendarEvents.filter(ev => ev.start_time && ev.start_time.startsWith(todayIso));
+      if (calendarTodayBadge) {
+        calendarTodayBadge.textContent = String(todayMeetings.length);
+      }
+
+      renderCalendarGrid();
+    }
+
+    // ========================================================================
+    // MARKDOWN PARSER & CHAT MESSAGE APPENDING
+    // ========================================================================
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+
+    function sendPrompt(text) {
+      input.value = text;
+      handleSend();
+    }
+
+    function formatMarkdown(text) {
+      const lines = String(text ?? '').split('\n');
+      const out = [];
+      let i = 0;
+
+      const inlineFmt = (s) => escapeHtml(s)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.trim().startsWith('|') && i + 1 < lines.length && /^\|[\s:-|]+\|$/.test(lines[i + 1].trim())) {
+          const headers = line.trim().slice(1, -1).split('|').map(c => c.trim());
+          i += 2;
+          const rows = [];
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            rows.push(lines[i].trim().slice(1, -1).split('|').map(c => c.trim()));
+            i++;
+          }
+          let tbl = '<div class="table-wrapper" tabindex="0" role="region" aria-label="Таблица данных"><table><thead><tr>'
+            + headers.map(h => `<th scope="col">${inlineFmt(h)}</th>`).join('')
+            + '</tr></thead><tbody>';
+          for (const r of rows) {
+            tbl += '<tr>' + r.map(c => `<td>${inlineFmt(c)}</td>`).join('') + '</tr>';
+          }
+          tbl += '</tbody></table></div>';
+          out.push(tbl);
+          continue;
+        }
+        if (/^#{2,3}\s+/.test(line)) {
+          out.push('<h3>' + inlineFmt(line.replace(/^#{2,3}\s+/, '')) + '</h3>');
+        } else if (/^- /.test(line.trim())) {
+          out.push('• ' + inlineFmt(line.trim().slice(2)) + '<br>');
+        } else if (line.trim() === '---') {
+          out.push('<hr style="border:0;border-top:1px solid var(--glass-border);margin:8px 0;">');
+        } else if (line.trim() === '') {
+          out.push('<br>');
+        } else {
+          out.push(inlineFmt(line) + '<br>');
+        }
+        i++;
+      }
+      return out.join('');
+    }
+
+    function appendMessage(text, role, tools = [], meta = null, actionCard = null) {
+      const row = document.createElement('div');
+      row.className = `msg-row ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = role === 'user' ? '<i data-lucide="user"></i>' : '<i data-lucide="bot"></i>';
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.innerHTML = formatMarkdown(text);
+
+      if (meta && meta.orchestrator === 'n8n') {
+        const n8nBadge = document.createElement('div');
+        n8nBadge.className = 'tool-badge';
+        n8nBadge.style.marginRight = '6px';
+        n8nBadge.innerHTML = `<i data-lucide="workflow"></i> <span>${escapeHtml(meta.branch ? `n8n (${meta.branch})` : 'n8n')}</span>`;
+        content.appendChild(n8nBadge);
+      }
+
+      if (tools && tools.length > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'tool-badge';
+        badge.innerHTML = `<i data-lucide="wrench"></i> <span>MCP: ${escapeHtml(tools.join(', '))}</span>`;
+        content.appendChild(badge);
+      }
+
+      if (actionCard) {
+        const cardNode = renderActionCard(actionCard);
+        if (cardNode) content.appendChild(cardNode);
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(content);
+      chatWindow.appendChild(row);
+
+      if (window.lucide) lucide.createIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function showLoading(text = '') {
+      const id = 'loading-' + Date.now();
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+      row.id = id;
+      row.innerHTML = `
+        <div class="avatar" aria-hidden="true"><i data-lucide="bot"></i></div>
+        <div class="msg-content">
+          ${text ? `<div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">${escapeHtml(text)}</div>` : ''}
+          <div class="typing" aria-label="Загрузка ответа"><span></span><span></span><span></span></div>
+        </div>
+      `;
+      chatWindow.appendChild(row);
+      if (window.lucide) lucide.createIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      return id;
+    }
+
+    function removeLoading(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    // ========================================================================
+    // ACTION CARD & STATELESS CONFIRMATION FLOW
+    // ========================================================================
+    function renderActionCard(card) {
+      if (!card) return null;
+      const cardEl = document.createElement('div');
+      cardEl.className = 'action-card-wrapper';
+
+      // Duration selector buttons
+      if (card.duration_buttons && card.duration_buttons.length > 0) {
+        const durEl = document.createElement('div');
+        durEl.className = 'chat-duration-selector';
+        card.duration_buttons.forEach(btn => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn-duration' + (btn.is_default ? ' active' : '');
+          b.innerHTML = `<i data-lucide="clock"></i> <span>${escapeHtml(btn.label || btn.minutes + ' мин')}</span>`;
+          b.onclick = () => {
+            durEl.querySelectorAll('.btn-duration').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            sendPrompt(`Встреча на ${btn.minutes} минут с ${card.target_person || 'Кузнецовым'}`);
+          };
+          durEl.appendChild(b);
+        });
+        cardEl.appendChild(durEl);
+      }
+
+      // Slot chips
+      if (card.slots && card.slots.length > 0) {
+        const slotsEl = document.createElement('div');
+        slotsEl.className = 'chat-slots-container';
+        card.slots.forEach(slot => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'slot-chip';
+          const label = slot.label || `${slot.start} – ${slot.end}`;
+          chip.innerHTML = `<i data-lucide="calendar"></i> <span>${escapeHtml(label)}</span>`;
+          chip.onclick = () => selectMeetingSlot(slot, card);
+          slotsEl.appendChild(chip);
+        });
+        cardEl.appendChild(slotsEl);
+      }
+
+      return cardEl;
+    }
+
+    function selectMeetingSlot(slot, card) {
+      const existing = document.getElementById('confirm-card-temp');
+      if (existing) existing.remove();
+
+      const title = `Встреча с ${card.target_person || 'Кузнецовым И.П.'}`;
+      const startTime = slot.iso_start || slot.start_time || '2026-11-12T14:30:00+03:00';
+      const endTime = slot.iso_end || slot.end_time || '2026-11-12T15:00:00+03:00';
+      const organizer = getCurrentUser();
+      const organizerId = organizer.telegram_id === 100001 ? 1 : 2;
+      const participantId = card.target_employee_id || 2;
+      const slotTimeText = slot.label || `${slot.start} – ${slot.end}`;
+
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+      row.id = 'confirm-card-temp';
+      row.innerHTML = `
+        <div class="avatar" aria-hidden="true"><i data-lucide="calendar"></i></div>
+        <div class="msg-content" style="max-width: 100%;">
+          <div class="meeting-confirm-card">
+            <div class="confirm-card-header">
+              <i data-lucide="clipboard-list"></i>
+              <span>Подтверждение записи в корпоративный календарь</span>
+            </div>
+            <div class="confirm-card-body">
+              <div><strong>Тема:</strong> ${escapeHtml(title)}</div>
+              <div><strong>Время:</strong> ${escapeHtml(slotTimeText)} (12 ноября 2026, МСК)</div>
+              <div><strong>Участники:</strong> ${escapeHtml(organizer.full_name)} (Вы), ${escapeHtml(card.target_person || 'Кузнецов Иван Петрович')}</div>
+            </div>
+            <div class="confirm-card-actions">
+              <button type="button" class="btn-confirm-yes" onclick="submitMeetingConfirmation(this)"
+                      data-title="${escapeHtml(title)}"
+                      data-start="${escapeHtml(startTime)}"
+                      data-end="${escapeHtml(endTime)}"
+                      data-organizer="${organizerId}"
+                      data-participants="[${participantId}]">
+                <i data-lucide="check-circle-2"></i>
+                <span>Подтвердить и создать</span>
+              </button>
+              <button type="button" class="btn-confirm-no" onclick="cancelMeetingCard(this)">
+                <i data-lucide="x-circle"></i>
+                <span>Отмена</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      chatWindow.appendChild(row);
+      if (window.lucide) lucide.createIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function cancelMeetingCard(btn) {
+      const row = btn.closest('.msg-row');
+      if (row) row.remove();
+    }
+
+    async function submitMeetingConfirmation(button) {
+      const payload = {
+        title: button.getAttribute('data-title'),
+        start_time: button.getAttribute('data-start'),
+        end_time: button.getAttribute('data-end'),
+        organizer_id: Number(button.getAttribute('data-organizer')),
+        participant_ids: JSON.parse(button.getAttribute('data-participants') || '[]'),
+        status: 'scheduled'
+      };
+
+      button.disabled = true;
+      button.innerHTML = '<i data-lucide="loader"></i> <span>Запись в календарь...</span>';
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/calendar/confirm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Id': String(currentTelegramId)
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const card = button.closest('.meeting-confirm-card');
+          card.innerHTML = `
+            <div class="confirm-success-banner">
+              <div style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="check-circle-2" style="color: #34d399;"></i>
+                <span>Встреча успешно создана в календаре!</span>
+              </div>
+              <div class="confirm-meta">Время: ${escapeHtml(data.start_time || payload.start_time)}</div>
+              <div class="notification-stub-badge">
+                <i data-lucide="bell"></i>
+                <span>Оповещение участникам: смоделировано (эмуляция Telegram / Bitrix24)</span>
+              </div>
+            </div>
+          `;
+          if (window.lucide) lucide.createIcons();
+          refreshCalendarEvents();
+        } else {
+          button.disabled = false;
+          button.innerHTML = '<i data-lucide="alert-triangle"></i> <span>Ошибка, повторить</span>';
+          if (window.lucide) lucide.createIcons();
+        }
+      } catch (err) {
+        button.disabled = false;
+        button.innerHTML = '<i data-lucide="alert-triangle"></i> <span>Ошибка сети</span>';
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    // ========================================================================
+    // CHAT ENGINE (/api/agent/chat & /api/agent/execute)
+    // ========================================================================
+    async function handleSend() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendMessage(text, 'user');
+      input.value = '';
+      sendBtn.disabled = true;
+
+      const loadingId = showLoading();
+
+      try {
+        let res = await fetch('/api/agent/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegramId: currentTelegramId,
+            chatId: currentTelegramId,
+            message: text
+          })
+        });
+
+        // Fallback to /api/agent/execute if /api/agent/chat returns 404
+        if (res.status === 404) {
+          res = await fetch('/api/agent/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId: currentTelegramId,
+              chatId: currentTelegramId,
+              message: text
+            })
+          });
+        }
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {}
+
+        removeLoading(loadingId);
+
+        const answerText = (data && (data.answer || data.reply)) || '';
+        if (answerText) {
+          appendMessage(answerText, 'bot', data.tools_invoked, data, data.action_card);
+        } else if (data && data.errorMessage) {
+          appendMessage('Ошибка: ' + data.errorMessage, 'bot');
+        } else if (!res.ok) {
+          appendMessage(`Ошибка сервера (HTTP ${res.status}).`, 'bot');
+        } else {
+          appendMessage('Не удалось получить ответ от ассистента.', 'bot');
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendMessage('Ошибка соединения со шлюзом: ' + err.message, 'bot');
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    // ========================================================================
+    // VOICE INPUT & FROSTED GLASS CANVAS EQUALIZER (CHATGPT VOICE BAR)
+    // ========================================================================
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let audioContext = null;
+    let analyserNode = null;
+    let audioSourceNode = null;
+    let animFrameId = null;
+    let audioChunks = [];
+    let recordingInterval = null;
+    let recordingSeconds = 0;
+    let isRecordingCancelled = false;
+    let isConnectingMic = false;
+    let isTranscribing = false;
+
+    const NUM_WAVE_BARS = 32;
+    const smoothedHeights = new Float32Array(NUM_WAVE_BARS).fill(3.0);
+
+    document.addEventListener('keydown', (e) => {
+      const voiceBar = document.getElementById('voice-bar');
+      if (voiceBar && voiceBar.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelRecording();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          stopRecordingAndSend();
+        }
+      }
+    });
+
+    function drawRoundedBar(ctx, x, y, width, height, radius) {
+      if (height < radius * 2) radius = height / 2;
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, radius);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function startWaveformVisualizer() {
+      const canvas = document.getElementById('voice-waveform');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      smoothedHeights.fill(3.0);
+      const freqData = new Uint8Array(analyserNode ? analyserNode.frequencyBinCount : 64);
+      const timeData = new Uint8Array(analyserNode ? analyserNode.fftSize : 128);
+
+      function render() {
+        const voiceBar = document.getElementById('voice-bar');
+        if (!voiceBar || voiceBar.style.display === 'none') {
+          return;
+        }
+
+        animFrameId = requestAnimationFrame(render);
+
+        let rms = 0;
+        if (analyserNode) {
+          try {
+            analyserNode.getByteFrequencyData(freqData);
+            analyserNode.getByteTimeDomainData(timeData);
+
+            let sumSquares = 0;
+            for (let i = 0; i < timeData.length; i++) {
+              const norm = (timeData[i] - 128) / 128;
+              sumSquares += norm * norm;
+            }
+            rms = Math.sqrt(sumSquares / timeData.length);
+          } catch (e) {
+            console.warn('AnalyserNode read error:', e);
+          }
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
+
+        if (cssWidth === 0 || cssHeight === 0) return;
+
+        const targetW = Math.round(cssWidth * dpr);
+        const targetH = Math.round(cssHeight * dpr);
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
+        }
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+        const now = performance.now();
+        const totalBars = NUM_WAVE_BARS;
+        const centerY = cssHeight / 2;
+
+        let barWidth = 3.5;
+        let gap = 3.5;
+        let totalWaveWidth = totalBars * barWidth + (totalBars - 1) * gap;
+        const maxWaveWidth = Math.max(0, cssWidth - 12);
+        if (totalWaveWidth > maxWaveWidth && maxWaveWidth > 0) {
+          const step = maxWaveWidth / totalBars;
+          barWidth = Math.max(2, step * 0.5);
+          gap = Math.max(1.5, step * 0.5);
+          totalWaveWidth = totalBars * barWidth + (totalBars - 1) * gap;
+        }
+
+        const startX = Math.max(0, (cssWidth - totalWaveWidth) / 2);
+
+        // Apple VisionOS Sky Blue & Electric Indigo Liquid Waveform Gradient
+        const grad = ctx.createLinearGradient(startX, 0, startX + totalWaveWidth, 0);
+        grad.addColorStop(0, '#0ea5e9');    // Sky Blue 500
+        grad.addColorStop(0.5, '#38bdf8');  // Sky Blue 400
+        grad.addColorStop(1, '#818cf8');    // Electric Indigo 400
+        ctx.fillStyle = grad;
+
+        const isSpeaking = rms > 0.018;
+
+        for (let i = 0; i < totalBars; i++) {
+          let targetHeight = 3.0;
+
+          if (isSpeaking && analyserNode) {
+            const distFromCenter = Math.abs(i - (totalBars - 1) / 2) / ((totalBars - 1) / 2);
+            const binIdx = Math.min(Math.floor((1 - distFromCenter * 0.75) * 20) + 1, freqData.length - 1);
+            const freqVal = freqData[binIdx] / 255;
+            const amplitude = Math.min(rms * 4.5, 1.0);
+
+            targetHeight = 3.0 + (freqVal * 0.6 + amplitude * 0.4) * (cssHeight - 6);
+          } else {
+            const idleWave = Math.sin(now * 0.0035 + i * 0.35) * 0.75;
+            targetHeight = 2.5 + idleWave;
+          }
+
+          smoothedHeights[i] += (targetHeight - smoothedHeights[i]) * 0.22;
+          const h = Math.max(2.5, Math.min(cssHeight - 4, smoothedHeights[i]));
+          const x = startX + i * (barWidth + gap);
+          const y = centerY - h / 2;
+
+          drawRoundedBar(ctx, x, y, barWidth, h, barWidth / 2);
+        }
+
+        ctx.restore();
+      }
+
+      render();
+    }
+
+    function cleanupAudioResources() {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        recordingInterval = null;
+      }
+      if (mediaStream) {
+        try {
+          mediaStream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+          console.warn('Error stopping media tracks:', e);
+        }
+        mediaStream = null;
+      }
+      if (audioContext && audioContext.state !== 'closed') {
+        try {
+          audioContext.close();
+        } catch (e) {
+          console.warn('Error closing audioContext:', e);
+        }
+        audioContext = null;
+      }
+      analyserNode = null;
+      audioSourceNode = null;
+    }
+
+    async function toggleRecording() {
+      if (isConnectingMic) return;
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecordingAndSend();
+      } else {
+        await startRecording();
+      }
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Ваш браузер не поддерживает запись аудио через getUserMedia.');
+        return;
+      }
+
+      const inputBar = document.getElementById('input-bar');
+      const voiceBar = document.getElementById('voice-bar');
+      const timerSpan = document.getElementById('voice-timer');
+      const legacyTimerSpan = document.getElementById('record-timer');
+
+      isConnectingMic = true;
+      isRecordingCancelled = false;
+
+      if (inputBar) inputBar.style.display = 'none';
+      if (voiceBar) voiceBar.style.display = 'flex';
+      if (timerSpan) timerSpan.textContent = 'Подключение...';
+      if (legacyTimerSpan) legacyTimerSpan.textContent = 'Подключение...';
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        isConnectingMic = false;
+
+        if (isRecordingCancelled) {
+          cleanupAudioResources();
+          if (voiceBar) voiceBar.style.display = 'none';
+          if (inputBar) inputBar.style.display = 'flex';
+          return;
+        }
+
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            audioContext = new AudioCtx();
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+            }
+            analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 256;
+            analyserNode.smoothingTimeConstant = 0.75;
+            audioSourceNode = audioContext.createMediaStreamSource(mediaStream);
+            audioSourceNode.connect(analyserNode);
+          }
+        } catch (audioCtxErr) {
+          console.warn('Web Audio API not supported or failed to initialize:', audioCtxErr);
+        }
+
+        let options = {};
+        if (typeof MediaRecorder.isTypeSupported === 'function') {
+          const isApple = /Macintosh|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+          if (isApple && MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+          } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            options = { mimeType: 'audio/webm;codecs=opus' };
+          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+            options = { mimeType: 'audio/webm' };
+          }
+        }
+
+        mediaRecorder = new MediaRecorder(mediaStream, options);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = handleRecordingStop;
+        mediaRecorder.start();
+
+        recordingSeconds = 0;
+        if (timerSpan) timerSpan.textContent = '00:00';
+        if (legacyTimerSpan) legacyTimerSpan.textContent = '00:00';
+
+        if (recordingInterval) clearInterval(recordingInterval);
+        recordingInterval = setInterval(() => {
+          recordingSeconds++;
+          const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+          const secs = String(recordingSeconds % 60).padStart(2, '0');
+          const timeStr = `${mins}:${secs}`;
+          if (timerSpan) timerSpan.textContent = timeStr;
+          if (legacyTimerSpan) legacyTimerSpan.textContent = timeStr;
+        }, 1000);
+
+        startWaveformVisualizer();
+
+      } catch (err) {
+        isConnectingMic = false;
+        cleanupAudioResources();
+        if (voiceBar) voiceBar.style.display = 'none';
+        if (inputBar) inputBar.style.display = 'flex';
+        alert('Не удалось получить доступ к микрофону: ' + err.message);
+      }
+    }
+
+    function cancelRecording() {
+      isRecordingCancelled = true;
+      isConnectingMic = false;
+      cleanupAudioResources();
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+          mediaRecorder.stop();
+        } catch (e) {
+          console.warn('Error stopping mediaRecorder on cancel:', e);
+        }
+      }
+
+      const voiceBar = document.getElementById('voice-bar');
+      const inputBar = document.getElementById('input-bar');
+      if (voiceBar) voiceBar.style.display = 'none';
+      if (inputBar) inputBar.style.display = 'flex';
+      input.focus();
+    }
+
+    function stopRecordingAndSend() {
+      if (isConnectingMic) return;
+      isRecordingCancelled = false;
+      cleanupAudioResources();
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+          mediaRecorder.stop();
+        } catch (e) {
+          console.warn('Error stopping mediaRecorder on send:', e);
+        }
+      }
+
+      const voiceBar = document.getElementById('voice-bar');
+      const inputBar = document.getElementById('input-bar');
+      if (voiceBar) voiceBar.style.display = 'none';
+      if (inputBar) inputBar.style.display = 'flex';
+    }
+
+    let sttBadgeTimeout = null;
+    function showSttBadge(text, isError = false, iconName = '') {
+      const badge = document.getElementById('stt-status-badge');
+      if (!badge) return;
+      const icon = iconName || (isError ? 'alert-triangle' : (text.includes('Распознавание') ? 'loader' : 'mic'));
+      badge.innerHTML = `<i data-lucide="${icon}"></i> <span>${escapeHtml(text)}</span>`;
+      badge.style.display = 'inline-flex';
+      badge.style.borderColor = isError ? '#f43f5e' : 'var(--accent-emerald)';
+      badge.style.color = isError ? '#fecdd3' : 'var(--accent-emerald)';
+      badge.style.background = isError ? 'rgba(244, 63, 94, 0.15)' : 'rgba(52, 211, 153, 0.15)';
+      if (window.lucide) lucide.createIcons();
+
+      if (sttBadgeTimeout) clearTimeout(sttBadgeTimeout);
+      if (!text.includes('Распознавание')) {
+        sttBadgeTimeout = setTimeout(() => {
+          badge.style.display = 'none';
+        }, 6000);
+      }
+    }
+
+    async function handleRecordingStop() {
+      if (isRecordingCancelled) {
+        audioChunks = [];
+        return;
+      }
+
+      if (audioChunks.length === 0) {
+        input.focus();
+        return;
+      }
+
+      if (isTranscribing) return;
+      isTranscribing = true;
+
+      const mime = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+      const audioBlob = new Blob(audioChunks, { type: mime });
+      audioChunks = [];
+      const extension = mime.includes('mp4') ? 'm4a' : 'webm';
+      const audioFile = new File([audioBlob], `mic_recording.${extension}`, { type: mime });
+
+      showSttBadge('Распознавание речи...', false, 'loader');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', audioFile);
+
+        const res = await fetch('/api/audio/transcribe?language=ru', {
+          method: 'POST',
+          body: formData
+        });
+
+        const rawText = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {}
+
+        if (res.status === 404 || res.status === 405 || res.status === 501) {
+          showSttBadge('Аудио-модуль (/api/audio/transcribe) пока не подключён на сервере.', true, 'alert-triangle');
+          return;
+        }
+
+        if (!res.ok) {
+          const errMsg = (data && (data.error || data.message)) || rawText || `HTTP ${res.status}: ${res.statusText}`;
+          showSttBadge(`Ошибка (${res.status}): ${errMsg}`, true, 'alert-triangle');
+          return;
+        }
+
+        if (data && data.success && data.text) {
+          const recognizedText = data.text.trim();
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          const currentVal = input.value || '';
+
+          if (currentVal.trim().length === 0) {
+            input.value = recognizedText;
+          } else if (typeof start === 'number' && typeof end === 'number' && start <= currentVal.length) {
+            const before = currentVal.substring(0, start);
+            const after = currentVal.substring(end);
+            const sepBefore = (before.length > 0 && !/\s$/.test(before)) ? ' ' : '';
+            const sepAfter = (after.length > 0 && !/^\s/.test(after)) ? ' ' : '';
+            input.value = before + sepBefore + recognizedText + sepAfter + after;
+            const newPos = (before + sepBefore + recognizedText).length;
+            input.setSelectionRange(newPos, newPos);
+          } else {
+            const sep = (!/\s$/.test(currentVal)) ? ' ' : '';
+            input.value = currentVal + sep + recognizedText;
+          }
+
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
+          const sec = data.duration_ms ? (data.duration_ms / 1000).toFixed(1) : '0.0';
+          showSttBadge(`Распознано: ${data.provider || 'local-metal'}, ${sec}s`, false, 'check-circle-2');
+        } else {
+          const errMsg = (data && (data.error || data.message)) || 'Речь не распознана';
+          showSttBadge(`Ошибка: ${errMsg}`, true, 'alert-triangle');
+        }
+      } catch (err) {
+        showSttBadge(`Ошибка сети: ${err.message}`, true, 'alert-triangle');
+      } finally {
+        isTranscribing = false;
+        input.focus();
+      }
+    }
+
+    // ========================================================================
+    // MEETING AUDIO PROCESSING & MOM PROTOCOL CARD
+    // ========================================================================
+    async function handleAudioUpload(inputEl) {
+      if (!inputEl.files || !inputEl.files[0]) return;
+      const file = inputEl.files[0];
+      inputEl.value = '';
+
+      appendMessage(`Загружена аудиозапись встречи: **${file.name}** (${(file.size / (1024 * 1024)).toFixed(1)} МБ). Запущен цикл расшифровки и составления протокола (MoM)...`, 'user');
+
+      const loadingId = showLoading('Идет транскрибация аудио и интеллектуальный анализ протокола встречи...');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+
+        const res = await fetch('/api/meetings/process-audio?language=ru', {
+          method: 'POST',
+          body: formData
+        });
+
+        const rawText = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {}
+
+        removeLoading(loadingId);
+
+        if (res.status === 404 || res.status === 405 || res.status === 501) {
+          appendMessage('Сервис обработки аудио встреч (/api/meetings/process-audio) пока не подключён на сервере (раздел в разработке).', 'bot');
+          return;
+        }
+
+        if (res.ok && data && data.success) {
+          renderMeetingProtocolCard(data);
+        } else {
+          const errMsg = (data && (data.error || data.message)) || rawText || `HTTP ${res.status}: ${res.statusText}`;
+          appendMessage('Ошибка обработки аудиозаписи совещания: ' + errMsg, 'bot');
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendMessage('Ошибка соединения со шлюзом при загрузке аудиозаписи: ' + err.message, 'bot');
+      }
+    }
+
+    function renderMeetingProtocolCard(data) {
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = '<i data-lucide="clipboard-list"></i>';
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.style.maxWidth = '100%';
+
+      const proto = data.protocol || {};
+      const trans = data.transcription || {};
+      const meetingId = data.meeting_id || '';
+      const provider = trans.provider || 'local-metal';
+      const durationSec = trans.duration_ms ? (trans.duration_ms / 1000).toFixed(1) : '—';
+      const providerClass = provider.includes('gemini') ? 'gemini' : 'local';
+      const providerLabel = provider.includes('gemini') ? 'Gemini 1.5 Flash' : `Whisper (${provider})`;
+
+      let decisionsHtml = '';
+      if (proto.decisions && proto.decisions.length > 0) {
+        decisionsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="check-circle-2"></i> <span>Принятые решения:</span></h4>
+            <ul>
+              ${proto.decisions.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let discussedHtml = '';
+      if (proto.discussed && proto.discussed.length > 0) {
+        discussedHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="message-square"></i> <span>Обсуждали:</span></h4>
+            <ul>
+              ${proto.discussed.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let risksHtml = '';
+      if (proto.risks && proto.risks.length > 0) {
+        risksHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="alert-triangle"></i> <span>Риски и блокеры:</span></h4>
+            <ul>
+              ${proto.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let clarificationsHtml = '';
+      if (proto.requires_clarification && proto.requires_clarification.length > 0) {
+        clarificationsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="help-circle"></i> <span>Требует уточнения:</span></h4>
+            <ul>
+              ${proto.requires_clarification.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let actionItemsHtml = '';
+      const items = data.action_items || [];
+      if (items.length > 0) {
+        actionItemsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="check-square"></i> <span>Поручения (Задачи):</span></h4>
+            <div class="action-items-list">
+              ${items.map((item, idx) => `
+                <div class="action-item-card">
+                  <div class="action-item-info">
+                    <div class="action-item-title">${escapeHtml(item.title)}</div>
+                    <div class="action-item-meta">
+                      Отв.: <strong>${escapeHtml(item.responsible || 'требует уточнения')}</strong> |
+                      Срок: <strong>${escapeHtml(item.deadline || item.deadline_text || 'требует уточнения')}</strong>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-bitrix" data-action-idx="${idx}">
+                    <i data-lucide="check-circle-2"></i>
+                    <span>В Битрикс24</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      const cardHtml = `
+        <div class="mom-card">
+          <div class="mom-header">
+            <div class="mom-title-row">
+              <div class="mom-icon-wrap" aria-hidden="true">
+                <i data-lucide="clipboard-list"></i>
+              </div>
+              <h3 class="mom-title">${escapeHtml(proto.title || 'Протокол совещания')}</h3>
+            </div>
+            <div class="mom-badges">
+              <span class="engine-badge ${providerClass}"><i data-lucide="cpu"></i> ${escapeHtml(providerLabel)}</span>
+              <span class="duration-badge"><i data-lucide="clock"></i> ${escapeHtml(durationSec)}s</span>
+            </div>
+          </div>
+
+          <div class="mom-section">
+            <h4><i data-lucide="file-text"></i> <span>Резюме встречи:</span></h4>
+            <p class="mom-summary">${escapeHtml(proto.summary || 'Сводка отсутствует.')}</p>
+          </div>
+
+          ${decisionsHtml}
+          ${discussedHtml}
+          ${risksHtml}
+          ${clarificationsHtml}
+          ${actionItemsHtml}
+
+          <div class="mom-footer">
+            <button type="button" class="btn-docx-download">
+              <i data-lucide="download"></i>
+              <span>Скачать протокол .DOCX</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      content.innerHTML = cardHtml;
+
+      content.querySelectorAll('.btn-bitrix[data-action-idx]').forEach(btn => {
+        const idx = Number(btn.getAttribute('data-action-idx'));
+        const item = items[idx];
+        if (item) {
+          btn.addEventListener('click', () => createBitrixTask(item.id, item.title, btn));
+        }
+      });
+
+      const downloadBtn = content.querySelector('.btn-docx-download');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+          downloadDocx(meetingId, proto.docx_base64 || '', proto.title || 'Protocol');
+        });
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(content);
+      chatWindow.appendChild(row);
+
+      if (window.lucide) lucide.createIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    // ========================================================================
+    // BITRIX24 TASK CREATION (/api/telegram/webhook)
+    // ========================================================================
+    async function createBitrixTask(actionItemId, title, buttonEl) {
+      if (!buttonEl) return;
+      const originalHtml = buttonEl.innerHTML;
+      buttonEl.disabled = true;
+      buttonEl.innerHTML = '<i data-lucide="loader"></i> <span>Создание...</span>';
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/telegram/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callback_query: {
+              id: 'web_cb_' + Date.now(),
+              from: { id: currentTelegramId, first_name: getCurrentUser().full_name || 'WebUser' },
+              message: { chat: { id: currentTelegramId } },
+              data: `create_bitrix_task:${actionItemId}`
+            }
+          })
+        });
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {}
+
+        const textMsg = data && typeof data.text === 'string' ? data.text : '';
+        if (res.ok && data && data.show_alert && (textMsg.includes('успешно') || textMsg.includes('создана') || textMsg.toLowerCase().includes('success'))) {
+          buttonEl.innerHTML = '<i data-lucide="check-check"></i> <span>Задача создана в Битрикс24</span>';
+          buttonEl.classList.add('btn-bitrix-success');
+          buttonEl.disabled = true;
+          if (window.lucide) lucide.createIcons();
+        } else {
+          alert(textMsg || (res.status === 401 ? 'Вебхук защищён секретным токеном на шлюзе.' : 'Не удалось создать задачу в Битрикс24.'));
+          buttonEl.innerHTML = originalHtml;
+          buttonEl.disabled = false;
+          if (window.lucide) lucide.createIcons();
+        }
+      } catch (err) {
+        alert('Ошибка сети при создании задачи: ' + err.message);
+        buttonEl.innerHTML = originalHtml;
+        buttonEl.disabled = false;
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    // ========================================================================
+    // DOCX DOWNLOAD
+    // ========================================================================
+    function downloadDocx(meetingId, base64Data, title) {
+      const fileName = (title || 'Protocol') + '.docx';
+      if (base64Data && base64Data.length > 50) {
+        try {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        } catch (e) {
+          console.warn('Base64 docx download error, falling back to endpoint', e);
+        }
+      }
+      window.open(`/api/meetings/${encodeURIComponent(meetingId)}/export-docx`, '_blank');
+    }
+
+    // ========================================================================
+    // INITIALIZATION
+    // ========================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUsers();
+      renderCalendarGrid();
+      refreshCalendarEvents();
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>

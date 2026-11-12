@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Fotoprint.AiGateway.Api/Fotoprint.AiGateway.Api.csproj" />
+    <Project Path="src/Fotoprint.Core/Fotoprint.Core.csproj" />
+    <Project Path="src/Fotoprint.Mcp.Bitrix24/Fotoprint.Mcp.Bitrix24.csproj" />
+    <Project Path="src/Fotoprint.Mcp.Calendar/Fotoprint.Mcp.Calendar.csproj" />
+    <Project Path="src/Fotoprint.Mcp.EmployeeReader/Fotoprint.Mcp.EmployeeReader.csproj" />
+    <Project Path="src/Fotoprint.Mcp.KnowledgeBase/Fotoprint.Mcp.KnowledgeBase.csproj" />
+    <Project Path="src/Fotoprint.Mcp.OneC/Fotoprint.Mcp.OneC.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fotoprint.Tests/Fotoprint.Tests.csproj" />
+  </Folder>
+</Solution>

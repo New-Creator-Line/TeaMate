@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+  title: Fotoprint AI Copilot Gateway API (Track 3)
+  version: 2.0.0
+  description: >
+    Канально-независимое REST API AI-ассистента ООО «Фотопринт» для подключения
+    кастомной CRM (вход `/api/chat/ingress`, HITL-кнопки `actions[]`, протоколы `draft`/`final`,
+    реестр задач без владельца `/api/tasks/orphans`, журнал аудита `/api/audit/events`).
+servers:
+  - url: http://localhost:8080
+    description: Local Gateway
+paths:
+  /api/chat/ingress:
+    post:
+      summary: Универсальный вход для кастомной CRM и мессенджеров
+      description: Принимает `channel + external_user_id`, резолвит `MasterId`, запускает агента и возвращает `actions[]` для отрисовки интерактивных кнопок в CRM.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelChatIngressRequest'
+      responses:
+        '200':
+          description: Ответ агента с необязательным блоком подтверждения `actions[]`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelChatIngressResponse'
+        '403':
+          description: Сотрудник не найден или неактивен в RBAC
+  /api/actions/{actionId}/confirm:
+    post:
+      summary: Явное подтверждение отложенного мутирующего действия (HITL AI-03)
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Результат выполнения сохранённого плана с фиксированными аргументами
+  /api/actions/{actionId}/cancel:
+    post:
+      summary: Идемпотентная отмена отложенного действия
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: План отменён без изменения внешних систем
+  /api/meetings/process-audio:
+    post:
+      summary: Транскрибация аудиозаписи встречи + MoM-черновик с 4 статусами + DOCX/HTML
+      responses:
+        '200':
+          description: "Черновик протокола (status=draft) и список поручений с source_quote"
+  /api/meetings/{id}/protocol/update:
+    post:
+      summary: Редактирование черновика протокола перед финализацией (AI-07)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Обновлённый черновик и пересобранный DOCX
+  /api/meetings/{id}/protocol/confirm:
+    post:
+      summary: Финализация протокола (`draft` -> `final`) с записью в аудит
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Статус протокола переведён в `final`
+  /api/tasks/orphans:
+    get:
+      summary: Задачи без назначенного ответственного или срока («требует уточнения», Сценарий 4)
+      responses:
+        '200':
+          description: Список незавершённых поручений без владельца или дедлайна
+  /api/audit/events:
+    get:
+      summary: Стандартизованный журнал аудита (ОТ-04, AI-06; доступ Директору)
+      responses:
+        '200':
+          description: События аудита (`actor_telegram_id`, `channel`, `action`, `object_type`, `object_id`, `result`, `trace_id`, `details_masked`)
+  /api/data/purge-test:
+    delete:
+      summary: Удаление временных/тестовых диалогов и заметок (п. 7.4 ТЗ)
+      responses:
+        '200':
+          description: Подтверждение удаления и запись события в аудит
+components:
+  schemas:
+    CrmUser:
+      type: object
+      properties:
+        master_id: { type: integer, format: int64 }
+        external_user_id: { type: string }
+        channel: { type: string }
+        full_name: { type: string }
+        department: { type: string }
+        roles: { type: array, items: { type: string } }
+    CrmOrder:
+      type: object
+      properties:
+        order_id: { type: string }
+        customer_name: { type: string }
+        product_name: { type: string }
+        quantity: { type: integer }
+        amount_byn: { type: number, format: decimal }
+        currency: { type: string, example: BYN }
+        status: { type: string }
+        deadline_utc: { type: string, format: date-time }
+    CrmAlert:
+      type: object
+      properties:
+        alert_id: { type: string }
+        severity: { type: string, enum: [info, warning, critical] }
+        title: { type: string }
+        source: { type: string }
+        generated_at_utc: { type: string, format: date-time }
+    ActionButton:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [confirm, edit, cancel] }
+        label: { type: string }
+        endpoint: { type: string, nullable: true }
+        command: { type: string, nullable: true }
+    ChannelChatIngressRequest:
+      type: object
+      required: [channel, external_user_id, message]
+      properties:
+        channel: { type: string, example: crm }
+        external_user_id: { type: string, example: "100002" }
+        message: { type: string }
+        chat_id: { type: integer, format: int64, nullable: true }
+        trace_id: { type: string, nullable: true }
+    ChannelChatIngressResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        channel: { type: string }
+        external_user_id: { type: string }
+        employee_id: { type: integer }
+        master_id: { type: integer, format: int64 }
+        session_id: { type: string, format: uuid }
+        answer: { type: string }
+        tools_invoked: { type: array, items: { type: string } }
+        pending_action_id: { type: string, nullable: true }
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionButton'
+        trace_id: { type: string }

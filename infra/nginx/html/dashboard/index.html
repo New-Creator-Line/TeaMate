@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PicPac Control Room — Единая система управления</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+  <!-- Экран входа / регистрации по ролям из таблицы employees -->
+  <div class="auth-overlay" id="authOverlay">
+    <section class="auth-card" aria-labelledby="authHeading">
+      <div class="brand-row">
+        <div class="brand-mark">PP</div>
+        <div>
+          <div class="brand-title">PicPac · Фотопринт</div>
+          <div class="brand-sub">Единая система управления · Трек 1</div>
+        </div>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" class="active" id="tabLogin">Вход в аккаунт</button>
+        <button type="button" id="tabRegister">Регистрация</button>
+      </div>
+
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">
+        Быстрый выбор сотрудника из таблицы <code>employees</code>:
+      </p>
+      <div class="role-presets">
+        <button type="button" class="role-chip active" data-preset-role="Director">
+          <strong>Алексей Смирнов</strong>
+          <span>Director · Все 5 дашбордов</span>
+        </button>
+        <button type="button" class="role-chip" data-preset-role="Production">
+          <strong>Иван Кузнецов</strong>
+          <span>Production · ERP и качество</span>
+        </button>
+        <button type="button" class="role-chip" data-preset-role="Sales">
+          <strong>Елена Морозова</strong>
+          <span>Sales · CRM и клиент</span>
+        </button>
+        <button type="button" class="role-chip" data-preset-role="Accounting">
+          <strong>Ольга Соколова</strong>
+          <span>Accounting · 1С и HR</span>
+        </button>
+      </div>
+
+      <div class="auth-error" id="authError" role="alert"></div>
+
+      <form class="form-grid" id="authForm" novalidate>
+        <div class="field hidden" id="regNameField">
+          <label for="authName">ФИО сотрудника</label>
+          <input id="authName" type="text" placeholder="Алексей Смирнов">
+        </div>
+        <div class="field">
+          <label for="authEmail">Корпоративный e-mail</label>
+          <input id="authEmail" type="email" value="a.smirnov@fotoprint.by" required>
+        </div>
+        <div class="field">
+          <label for="authPassword">Пароль</label>
+          <input id="authPassword" type="password" value="Fotoprint2026!" required>
+        </div>
+        <div class="field hidden" id="regConfirmField">
+          <label for="authConfirm">Повторите пароль</label>
+          <input id="authConfirm" type="password" value="Fotoprint2026!">
+        </div>
+        <button type="submit" class="btn btn-primary" id="authSubmitBtn" style="justify-content:center;padding:12px">
+          Войти в дашборд
+        </button>
+      </form>
+    </section>
+  </div>
+
+  <!-- Основной интерфейс дашборда -->
+  <div class="app-shell hidden" id="appShell">
+    <header class="top-nav">
+      <div class="brand-row">
+        <div class="brand-mark">PP</div>
+        <div>
+          <div class="brand-title">PicPac Pulse</div>
+          <div class="brand-sub" id="userBadge">Алексей Смирнов · Генеральный директор</div>
+        </div>
+      </div>
+
+      <nav class="screen-pills" aria-label="Разделы дашборда">
+        <button type="button" class="screen-pill active" data-screen="pulse">Пульс компании</button>
+        <button type="button" class="screen-pill" data-screen="sales">Продажи и клиент</button>
+        <button type="button" class="screen-pill" data-screen="production">Производство и качество</button>
+        <button type="button" class="screen-pill" data-screen="finance">Финансы и люди</button>
+        <button type="button" class="screen-pill" data-screen="decisions">Реестр решений</button>
+      </nav>
+
+      <div class="profile-bar">
+        <select class="role-switcher" id="roleSwitcher" aria-label="Роль сотрудника">
+          <option value="Director">Роль: Director (Все разделы)</option>
+          <option value="Production">Роль: Production (Производство)</option>
+          <option value="Sales">Роль: Sales (Продажи)</option>
+          <option value="Accounting">Роль: Accounting (Бухгалтерия)</option>
+        </select>
+        <button type="button" class="btn" id="logoutBtn">Выйти</button>
+      </div>
+    </header>
+
+    <section class="hero-bar">
+      <div>
+        <div class="eyebrow">Единый контур управления · /api/system/stats</div>
+        <h1 class="page-title" id="pageTitle">Пульс компании</h1>
+        <p class="page-sub" id="pageSubtitle">Главное за период: от сигнала отклонения до решения и повторной проверки</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn" id="refreshBtn">↻ Обновить срез</button>
+        <button type="button" class="btn" id="exportBtn">⬇ Выгрузить CSV</button>
+        <button type="button" class="btn btn-primary" id="newDecisionBtn">+ Новое решение</button>
+      </div>
+    </section>
+
+    <section class="filter-strip" aria-label="Фильтры периода и подразделений">
+      <label class="filter-pill">
+        Период:
+        <select id="periodSelect">
+          <option value="30">Последние 30 дней</option>
+          <option value="7">Последние 7 дней</option>
+          <option value="90">Квартал (90 дней)</option>
+        </select>
+      </label>
+      <label class="filter-pill">
+        От:
+        <input type="date" id="dateFrom" value="2026-10-13">
+      </label>
+      <label class="filter-pill">
+        До:
+        <input type="date" id="dateTo" value="2026-11-11">
+      </label>
+      <label class="filter-pill">
+        Подразделение:
+        <select id="deptSelect">
+          <option value="all">Все подразделения</option>
+          <option value="production">Производство</option>
+          <option value="sales">Продажи и поддержка</option>
+          <option value="accounting">Бухгалтерия и HR</option>
+        </select>
+      </label>
+      <label class="filter-pill">
+        Продукт:
+        <select id="productSelect">
+          <option value="all">Все продукты</option>
+          <option value="books">Фотокниги Premium/Classic</option>
+          <option value="prints">Фотопечать</option>
+          <option value="calendars">Календари и подарки</option>
+        </select>
+      </label>
+      <div class="sync-badge">
+        <span class="status-dot"></span>
+        <span id="syncStatus">Синхронизация с /api/system/stats…</span>
+      </div>
+    </section>
+
+    <!-- Верхний ряд KPI с градиентными карточками (клик открывает детализацию и создание решения) -->
+    <section class="kpi-grid" id="kpiGrid" aria-label="Ключевые показатели"></section>
+
+    <!-- Блок из 4-го референса: Выполнение плана на день с полукруглыми шкалами -->
+    <section style="margin-bottom:8px">
+      <div class="section-head">
+        <div>
+          <h2>Выполнение плана на смену по метрикам</h2>
+          <p class="section-sub">Оперативный дневной план, процент выполнения и накопленный итог периода</p>
+        </div>
+        <span class="badge good">Обновлено в реальном времени</span>
+      </div>
+      <div class="daily-grid" id="dailyGrid"></div>
+    </section>
+
+    <!-- Средний ряд: Динамика + 5 связанных систем-источников -->
+    <section class="content-grid-2">
+      <article class="panel-card">
+        <div class="section-head">
+          <div>
+            <h2 id="chartTitle">Динамика показателя и прогноз</h2>
+            <p class="section-sub">Красная линия — факт, пунктир — прогноз на следующие недели (клик по KPI открывает разбор причины)</p>
+          </div>
+          <span class="badge warning">WAPE 8,4%</span>
+        </div>
+        <div class="chart-box">
+          <svg class="chart-svg" id="chartSvg" viewBox="0 0 720 165" preserveAspectRatio="none"></svg>
+          <div class="chart-labels">
+            <span>Нед. 1</span>
+            <span>Нед. 2</span>
+            <span>Нед. 3</span>
+            <span>Нед. 4</span>
+            <span>Нед. 5</span>
+            <span>Нед. 6</span>
+            <span>Факт сегодня</span>
+            <span>Прогноз +1</span>
+            <span>Прогноз +2</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel-card">
+        <div class="section-head">
+          <div>
+            <h2>Единый контур 5 систем-источников</h2>
+            <p class="section-sub">Кликните по системе для проверки свежести и ключевой метрики</p>
+          </div>
+          <span class="badge good">5 из 5 в контуре</span>
+        </div>
+        <div class="linked-list" id="systemsList"></div>
+      </article>
+    </section>
+
+    <!-- Нижний ряд: Прогноз мощности на 4 недели + Реестр решений -->
+    <section class="content-grid-2">
+      <article class="panel-card">
+        <div class="section-head">
+          <div>
+            <h2>Прогноз спроса и мощности (4 недели)</h2>
+            <p class="section-sub">Выявление недели ожидаемого дефицита и перевод в карточку решения одной кнопкой</p>
+          </div>
+          <span class="badge critical">Неделя 47: −640 ч</span>
+        </div>
+        <div id="forecastList"></div>
+      </article>
+
+      <article class="panel-card">
+        <div class="section-head">
+          <div>
+            <h2>Реестр решений и повторная проверка (до / после)</h2>
+            <p class="section-sub">Каждое отклонение фиксируется с владельцем, сроком и проверкой эффекта</p>
+          </div>
+          <button type="button" class="btn" onclick="document.querySelector('[data-screen=decisions]').click()">Все решения →</button>
+        </div>
+        <div id="decisionsList"></div>
+      </article>
+    </section>
+  </div>
+
+  <!-- Боковая панель создания / разбора решения -->
+  <div class="drawer" id="decisionDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div class="drawer-panel">
+      <div class="section-head" style="margin-bottom:18px">
+        <h2 id="drawerTitle">Новое управленческое решение</h2>
+        <button type="button" class="btn" id="closeDrawerBtn">✕</button>
+      </div>
+      <form class="form-grid" id="decisionForm">
+        <div class="field">
+          <label for="decProblem">Проблема и влияние на KPI</label>
+          <textarea id="decProblem" required>Брак на линии фотокниг Premium вырос до 8,1% при норме <= 5%.</textarea>
+        </div>
+        <div class="field">
+          <label for="decCause">Причина отклонения (детализация)</label>
+          <input id="decCause" type="text" value="Влажность партии бумаги 170 г/м² и смещение прижима на линии Kolbus" required>
+        </div>
+        <div class="field">
+          <label for="decAction">Назначенное действие</label>
+          <textarea id="decAction" required>Заменить партию бумаги со склада B2, выполнить калибровку Kolbus и провести контрольный тираж.</textarea>
+        </div>
+        <div class="field">
+          <label for="decOwner">Ответственный владелец</label>
+          <select id="decOwner">
+            <option>Иван Кузнецов · Начальник производства</option>
+            <option>Елена Морозова · Руководитель отдела продаж</option>
+            <option>Ольга Соколова · Главный бухгалтер</option>
+            <option>Алексей Смирнов · Генеральный директор</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field">
+            <label for="decDue">Срок исполнения</label>
+            <input id="decDue" type="date" value="2026-11-16" required>
+          </div>
+          <div class="field">
+            <label for="decPriority">Приоритет</label>
+            <select id="decPriority">
+              <option>Высокий</option>
+              <option>Средний</option>
+              <option>Низкий</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button type="submit" class="btn btn-primary">Подтвердить и сохранить в Реестр</button>
+          <button type="button" class="btn" id="cancelDrawerBtn">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+{
+  "id": "yJVGpootIBoGg8e2",
+  "name": "03_Pre_Meeting_Prep_Cron",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "Cron Every 5 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 260],
+      "id": "node-cron-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/notifications/dispatch/pre-meeting",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Dispatch Pre-Meeting Notifications (Cron)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 260],
+      "id": "node-cron-dispatch-pre-meeting"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "manual-pre-meeting-prep",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Manual Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 480],
+      "id": "node-manual-prep-trigger",
+      "webhookId": "manual-pre-meeting-prep"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/notifications/dispatch/pre-meeting",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || {}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Dispatch Pre-Meeting Notifications (Manual)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 480],
+      "id": "node-manual-dispatch-pre-meeting"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Brief Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 480],
+      "id": "node-respond-brief"
+    }
+  ],
+  "connections": {
+    "Cron Every 5 Min": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Pre-Meeting Notifications (Cron)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Pre-Meeting Notifications (Manual)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Pre-Meeting Notifications (Manual)": {
+      "main": [
+        [
+          {
+            "node": "Return Brief Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,139 @@
+# =============================================================================
+# Fotoprint AI Copilot - Декларативный манифест зависимостей и библиотек
+# =============================================================================
+version: "1.1"
+
+# 1. Пакеты .NET 9 (NuGet) для сервисов ядра, шлюза и MCP
+dotnet_packages:
+  core:
+    - name: "Npgsql"
+      version: "9.0.2"
+      license: "PostgreSQL"
+      description: "Высокопроизводительный драйвер PostgreSQL 16"
+    - name: "Pgvector"
+      version: "0.3.0"
+      license: "MIT"
+      description: "Поддержка векторного типа данных vector(1536)"
+    - name: "Pgvector.Dapper"
+      version: "0.3.0"
+      license: "MIT"
+      description: "Интеграция pgvector с Dapper micro-ORM"
+    - name: "Dapper"
+      version: "2.1.35"
+      license: "Apache-2.0"
+      description: "Micro-ORM для быстрых SQL-запросов"
+    - name: "DocumentFormat.OpenXml"
+      version: "3.1.1"
+      license: "MIT"
+      description: "Парсинг и генерация документов Word (.docx) и Excel (.xlsx)"
+    - name: "PdfPig"
+      version: "0.1.9"
+      license: "Apache-2.0"
+      description: "Извлечение текстового слоя из PDF-файлов без C++ зависимостей"
+    - name: "YamlDotNet"
+      version: "16.2.1"
+      license: "MIT"
+      description: "Парсинг и сериализация YAML конфигураций (config.yaml)"
+    - name: "xUnit"
+      version: "2.9.x"
+      license: "Apache-2.0"
+      description: "Фреймворк модульного и интеграционного тестирования (tests/Fotoprint.Tests)"
+
+  shared_runtimes:
+    - name: "Microsoft.Extensions.Caching.Memory"
+      version: "9.0.0"
+      license: "MIT"
+      description: "In-memory кэширование паспортов безопасности сотрудников"
+
+# 2. Модули и библиотеки для среды оркестрации n8n
+n8n_modules:
+  npm_packages:
+    - name: "axios"
+      version: "1.7.7"
+      license: "MIT"
+    - name: "lodash"
+      version: "4.17.21"
+      license: "MIT"
+    - name: "form-data"
+      version: "4.0.0"
+      license: "MIT"
+    - name: "pdf-parse"
+      version: "1.1.1"
+      license: "MIT"
+    - name: "docx"
+      version: "8.5.0"
+      license: "MIT"
+  allow_external: "axios,lodash,form-data,pdf-parse,docx"
+
+# 3. Внешние коннекторы и готовые MCP-серверы
+mcp_servers:
+  bitrix24:
+    type: "docker"
+    image: "bit2beat/bitrix24-mcp:latest"
+    license: "MIT"
+    enabled: true
+    port: 8085
+    env:
+      - "BITRIX24_WEBHOOK_URL"
+
+  onec_odata:
+    type: "internal-proxy"
+    package: "Fotoprint.Mcp.OneC"
+    license: "Proprietary / Internal"
+    port: 8082
+    description: "Защищенный MCP фасад к 1С:Управление нашей типографией с RBAC"
+
+# 4. Инфраструктурные шлюзы, БД и наблюдаемость
+infrastructure:
+  ingress_load_balancer:
+    image: "nginx:alpine"
+    license: "2-Clause BSD"
+    port: 80
+    description: "Внешний reverse proxy, сетевой rate limiting (limit_req) и сглаживание burst-пиков"
+    config: "infra/nginx/nginx.conf"
+  postgres_pgvector:
+    image: "pgvector/pgvector:pg16"
+    license: "PostgreSQL"
+  n8n:
+    image: "n8nio/n8n"
+    license: "Sustainable Use License (Fair-code)"
+  langfuse:
+    image: "langfuse/langfuse:3"
+    license: "MIT"
+  minio:
+    image: "minio/minio"
+    license: "AGPL-3.0"
+  clickhouse:
+    image: "clickhouse/clickhouse-server"
+    license: "Apache-2.0"
+
+# 5. Вспомогательные Python-библиотеки (для standalone FastMCP)
+python_packages:
+  - name: "fastmcp"
+    version: ">=0.1.0"
+    license: "Apache-2.0"
+  - name: "httpx"
+    version: ">=0.27.0"
+    license: "BSD-3-Clause"
+  - name: "pydantic"
+    version: ">=2.7.0"
+    license: "MIT"
+
+# 6. Используемые AI-модели и провайдеры (п. ОТ-08, п. 7.4 ТЗ)
+ai_models:
+  - name: "nvidia/nemotron-3-super-120b-a12b / nemotron-nano-9b-v2"
+    provider: "NVIDIA NIM API (integrate.api.nvidia.com)"
+    license: "NVIDIA Open Model License Agreement"
+    purpose: "Основной ReAct-агент, анализ протоколов MoM и LLM-as-a-Judge"
+  - name: "gemini-2.5-flash"
+    provider: "Google Gemini API"
+    license: "Commercial / Google API Terms of Service"
+    purpose: "Резервная транскрибация аудио и LLM-fallback"
+  - name: "gemini-embedding-2"
+    provider: "Google Gemini Embeddings API"
+    license: "Commercial / Google API Terms of Service"
+    purpose: "Векторизация документов и стенограмм встреч (vector(1536))"
+  - name: "Whisper (ggml-base / metal / faster-whisper)"
+    provider: "Local container / On-prem STT"
+    license: "MIT (OpenAI Whisper / whisper.cpp)"
+    purpose: "Локальное распознавание речи без отправки аудио во внешний контур"

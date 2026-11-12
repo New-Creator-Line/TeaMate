@@ -1,0 +1,82 @@
+{
+  "name": "02_RBAC_RAG_Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "RAG Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "id": "node-rag-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/rag/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Query\": \"{{ $json.body.text }}\",\n  \"UserAccessGroups\": {{ JSON.stringify($json.body.security_context.AccessGroups || ['all']) }},\n  \"TopK\": 4\n}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Gateway Vector Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "id": "node-rag-search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchResult = $json;\nconst query = $('RAG Webhook Trigger').item.json.body.text;\nconst results = searchResult.results || [];\n\nif (results.length === 0) {\n  return [{\n    json: {\n      answer: `По вашему запросу \"${query}\" в корпоративной базе знаний нет документов, доступных для вашего уровня допуска (${$('RAG Webhook Trigger').item.json.body.security_context.Department}).`,\n      sources_count: 0\n    }\n  }];\n}\n\nlet contextText = results.map((r, i) => `[Источник ${i+1}]: ${r.text}`).join('\\n\\n');\nlet prompt = `Вопрос пользователя: \"${query}\"\\n\\nНайденная регламентная информация:\\n${contextText}\\n\\nСформулируй краткий и точный ответ на основе приведенных регламентов типографии Fotoprint:`;\n\nreturn [{\n  json: {\n    answer: `На основе регламентов Fotoprint:\\n\\n` + results.map(r => '• ' + r.text).join('\\n\\n'),\n    prompt: prompt,\n    sources_count: results.length,\n    sources: results\n  }\n}];"
+      },
+      "name": "Format Grounded Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300],
+      "id": "node-rag-formatter"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return RAG Answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 300],
+      "id": "node-rag-respond"
+    }
+  ],
+  "connections": {
+    "RAG Webhook Trigger": {
+      "main": [
+        [
+          { "node": "Gateway Vector Search", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gateway Vector Search": {
+      "main": [
+        [
+          { "node": "Format Grounded Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Grounded Response": {
+      "main": [
+        [
+          { "node": "Return RAG Answer", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
+

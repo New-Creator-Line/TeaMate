@@ -1,0 +1,204 @@
+{
+  "name": "06_Executive_Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "executive-summary",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Executive Report Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "node-exec-trigger"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-employee-reader:8081/tools/get_employee_security_context?telegram_id={{ $json.body.user_id || 0 }}",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Check Security Passport",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "id": "node-exec-auth"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.Roles.includes('Director') || $json.AccessGroups.includes('c-level') }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Is Director or C-Level?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "id": "node-exec-if-role"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"forbidden\",\n  \"error\": \"Access Denied\",\n  \"message\": \"🚫 Доступ запрещен. Формирование управленческого отчета Executive Summary доступно только Генеральному директору и C-Level руководству.\"\n}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "name": "Return 403 To Non-Executive",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        480
+      ],
+      "id": "node-exec-403"
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-1c:8082/tools/get_production_kpis",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-Id",
+              "value": "100001"
+            },
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Fetch 1C KPIs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        240
+      ],
+      "id": "node-fetch-1c-kpi"
+    },
+    {
+      "parameters": {
+        "jsCode": "const kpiData = $json;\n\nconst report = `📊 УПРАВЛЕНЧЕСКИЙ ОТЧЕТ ДИРЕКТОРА (EXECUTIVE SUMMARY)\\n` +\n  `Период: за последние 7 дней\\n` +\n  `Допуск: C-Level / Генеральный директор\\n\\n` +\n  `🏭 1. Производственные показатели (1С):\\n` +\n  `• Выработка: ${kpiData.metrics.total_impressions.toLocaleString()} оттисков\\n` +\n  `• Завершенных заказов: ${kpiData.metrics.completed_orders_count}\\n` +\n  `• Процент тех. брака: ${kpiData.metrics.scrap_rate_percent}% (${kpiData.metrics.scrap_rate_status})\\n` +\n  `• Загрузка офсетного парка: ${kpiData.metrics.equipment_utilization_percent}%\\n` +\n  `• Сервисные риски: ${kpiData.metrics.planned_maintenance}\\n\\n` +\n  `✅ 2. Исполнительская дисциплина по протоколам (Битрикс24):\\n` +\n  `• Всего поручений по протоколам: 14\\n` +\n  `• Выполнено в срок: 11 (78.5%)\\n` +\n  `• В работе без просрочки: 2 (14.3%)\\n` +\n  `• Просрочено: 1 (7.2%) (Аванс поставщику валов)\\n\\n` +\n  `💡 Ключевой вывод Copilot: Загрузка производства близка к пиковой (87.4%). Главный риск срыва графика — задержка замены валов Heidelberg. Рекомендуется проконтролировать бухгалтерию по оплате аванса.`;\n\nreturn [{\n  json: {\n    status: 'success',\n    report_markdown: report,\n    kpi_summary: kpiData.metrics\n  }\n}];"
+      },
+      "name": "Synthesize Executive Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        240
+      ],
+      "id": "node-synth-exec"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Executive Summary",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        240
+      ],
+      "id": "node-respond-exec"
+    }
+  ],
+  "connections": {
+    "Executive Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Security Passport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Security Passport": {
+      "main": [
+        [
+          {
+            "node": "Is Director or C-Level?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Director or C-Level?": {
+      "main": [
+        [
+          {
+            "node": "Fetch 1C KPIs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return 403 To Non-Executive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch 1C KPIs": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Executive Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize Executive Digest": {
+      "main": [
+        [
+          {
+            "node": "Return Executive Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

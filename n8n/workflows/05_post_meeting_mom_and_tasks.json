@@ -1,0 +1,102 @@
+{
+  "name": "05_Post_Meeting_MoM_And_Tasks",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "post-meeting-summary",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "MoM Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "node-mom-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://ai-gateway:8080/api/meetings/{{ $json.body.meeting_id || 'bbbbbbb2-bbbb-bbbb-bbbb-bbbbbbbbbbbb' }}/generate-protocol",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Generate Docx Protocol",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ],
+      "id": "node-gen-protocol"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $json;\nconst meetingId = $('MoM Trigger').item.json.body.meeting_id || 'bbbbbbb2-bbbb-bbbb-bbbb-bbbbbbbbbbbb';\n\n// Выделение Action Items\nconst actionItems = [\n  {\n    action_id: 'eeeeeee1-eeee-eeee-eeee-eeeeeeeeeeee',\n    title: 'Сформировать и отправить поставщику спецификацию на валы Heidelberg',\n    responsible: 'Иван Кузнецов (Начальник производства)',\n    responsible_id: 2,\n    deadline: 'через 2 дня'\n  },\n  {\n    action_id: 'eeeeeee2-eeee-eeee-eeee-eeeeeeeeeeee',\n    title: 'Оплатить счет на запчасти Heidelberg (аванс 50%)',\n    responsible: 'Ольга Соколова (Главный бухгалтер)',\n    responsible_id: 4,\n    deadline: 'через 3 дня'\n  }\n];\n\nconst msgText = `📋 Сформирован протокол встречи (MoM)\\n\\n` +\n  `📁 Файл протокола сгенерирован в формате Word (.docx).\\n\\n` +\n  `🎯 Выделены поручения (требуется подтверждение постановки в Битрикс24):\\n` +\n  actionItems.map((a, i) => `${i+1}. ${a.title}\\n   👤 Ответственный: ${a.responsible}\\n   ⏳ Срок: ${a.deadline}`).join('\\n\\n');\n\nconst inlineKeyboard = actionItems.map(a => ([\n  {\n    text: `✅ Поставить в Битрикс: \"${a.title.substring(0, 30)}...\"`,\n    callback_data: `create_bitrix_task:${a.action_id}`\n  }\n]));\n\nreturn [{\n  json: {\n    status: 'success',\n    protocol_id: res.protocol_id,\n    meeting_id: meetingId,\n    message_markdown: msgText,\n    inline_keyboard: inlineKeyboard,\n    action_items: actionItems,\n    docx_ready: true\n  }\n}];"
+      },
+      "name": "Extract Action Items & Build Buttons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "id": "node-extract-tasks"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return MoM and Tasks",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        300
+      ],
+      "id": "node-respond-mom"
+    }
+  ],
+  "connections": {
+    "MoM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Docx Protocol",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Docx Protocol": {
+      "main": [
+        [
+          {
+            "node": "Extract Action Items & Build Buttons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Action Items & Build Buttons": {
+      "main": [
+        [
+          {
+            "node": "Return MoM and Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

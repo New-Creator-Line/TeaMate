@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fotoprint AI Copilot — Linear &amp; Raycast Obsidian Pro</title>
+  <link rel="stylesheet" href="themes/theme-obsidian.css">
+</head>
+<body>
+
+  <!-- ========================================================================
+       APPLICATION HEADER (Linear / Raycast Header with RBAC & Calendar)
+       ======================================================================== -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon-box" aria-hidden="true">
+        <i data-lucide="printer"></i>
+      </div>
+      <div class="title-group">
+        <h1>Fotoprint AI Copilot</h1>
+        <div class="model-badge">
+          <div class="pulse" aria-hidden="true"></div>
+          NVIDIA Nemotron-3.5 120B &amp; Whisper STT
+        </div>
+      </div>
+    </div>
+
+    <!-- RBAC User Switcher Dropdown -->
+    <div class="user-switcher" title="Переключение пользователя и роли RBAC">
+      <label for="user-select">
+        <i data-lucide="user"></i>
+        <span>Юзер:</span>
+      </label>
+      <select id="user-select" onchange="onUserChange()"></select>
+      <span id="role-badge" class="role-badge">Director</span>
+    </div>
+
+    <!-- Navigation & Calendar Trigger -->
+    <nav class="nav-links" aria-label="Внешние сервисы и календарь">
+      <button type="button" id="calendar-toggle-btn" class="nav-btn calendar-btn" onclick="toggleCalendarDrawer()" title="Открыть расписание и встречи">
+        <i data-lucide="calendar"></i>
+        <span>Календарь</span>
+        <span id="calendar-today-badge" class="calendar-badge" title="Встреч на сегодня">0</span>
+      </button>
+
+      <a href="http://localhost:5678" target="_blank" rel="noopener noreferrer" class="nav-btn">
+        <i data-lucide="zap"></i>
+        <span>n8n</span>
+      </a>
+      <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer" class="nav-btn">
+        <i data-lucide="bar-chart-2"></i>
+        <span>Langfuse</span>
+      </a>
+      <a href="/api/system/stats" target="_blank" rel="noopener noreferrer" class="nav-btn">
+        <i data-lucide="activity"></i>
+        <span>Метрики</span>
+      </a>
+    </nav>
+  </header>
+
+  <!-- ========================================================================
+       SLIDE-OVER CALENDAR DRAWER (#calendar-drawer)
+       ======================================================================== -->
+  <div id="calendar-backdrop" class="calendar-backdrop" onclick="toggleCalendarDrawer()"></div>
+
+  <div id="calendar-drawer" class="calendar-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <i data-lucide="calendar"></i>
+        <span>Календарь встреч</span>
+      </div>
+      <button type="button" class="drawer-close-btn" onclick="toggleCalendarDrawer()" aria-label="Закрыть календарь" title="Закрыть (Esc)">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <!-- RBAC View Mode Scope Bar -->
+    <div class="calendar-scope-bar">
+      <button type="button" id="scope-my-btn" class="scope-btn active" onclick="setCalendarScope('my')">
+        <i data-lucide="user"></i>
+        <span>Мои встречи</span>
+      </button>
+      <button type="button" id="scope-all-btn" class="scope-btn" onclick="setCalendarScope('all')" title="Доступно только генеральному директору">
+        <i data-lucide="building"></i>
+        <span>Вся компания</span>
+        <span class="lock-icon" id="scope-lock-icon"><i data-lucide="lock"></i></span>
+      </button>
+    </div>
+
+    <!-- Month Navigation -->
+    <div class="month-navigation">
+      <button type="button" class="nav-arrow" onclick="changeMonth(-1)" aria-label="Предыдущий месяц">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      <span id="current-month-label" class="month-label">Ноябрь 2026</span>
+      <button type="button" class="nav-arrow" onclick="changeMonth(1)" aria-label="Следующий месяц">
+        <i data-lucide="chevron-right"></i>
+      </button>
+    </div>
+
+    <!-- Calendar Month Grid -->
+    <div class="calendar-grid-header">
+      <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+    </div>
+    <div id="calendar-days-grid" class="calendar-days-grid"></div>
+
+    <!-- Selected Day Details Panel -->
+    <div class="day-details-panel">
+      <div id="selected-day-title" class="day-title">
+        <i data-lucide="clock"></i>
+        <span>Встречи на сегодня:</span>
+      </div>
+      <div id="day-meetings-list" class="meetings-list">
+        <div class="empty-meetings">Выберите дату в календаре для просмотра расписания</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MAIN CONVERSATION AREA
+       ======================================================================== -->
+  <main>
+    <div id="chat-window">
+      <div class="msg-row bot">
+        <div class="avatar" aria-hidden="true">
+          <i data-lucide="terminal"></i>
+        </div>
+        <div class="msg-content">
+          Здравствуйте! Я — корпоративный ассистент типографии «Фотопринт», работающий на нейросети <strong>NVIDIA Nemotron 3.5 120B</strong>.<br><br>
+          Я могу проверить статус тиража в 1С, рассчитать выработку машин Heidelberg, проверить задачи и сделки в Битрикс24, посмотреть планерки в корпоративном календаре или подсказать технологический регламент.<br><br>
+          Для голосовых сценариев доступны кнопки микрофона (голосовой ввод) и скрепки (загрузка аудиозаписи совещания для структурированного протокола MoM).
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Prompt Pills -->
+    <div class="quick-prompts">
+      <button type="button" class="pill" onclick="sendPrompt('Какой статус заказа 44102?')">
+        <i data-lucide="package"></i>
+        <span>Статус заказа 44102</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Покажи выработку и KPI офсетного цеха')">
+        <i data-lucide="trending-up"></i>
+        <span>KPI цеха</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какие у меня задачи в Битрикс24?')">
+        <i data-lucide="check-circle-2"></i>
+        <span>Мои задачи Битрикс24</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какие планерки запланированы на ближайший час?')">
+        <i data-lucide="calendar"></i>
+        <span>Планерки</span>
+      </button>
+      <button type="button" class="pill" onclick="sendPrompt('Какая норма брака для печатной машины Heidelberg?')">
+        <i data-lucide="book-open"></i>
+        <span>Нормы брака</span>
+      </button>
+      <button type="button" class="pill" onclick="document.getElementById('audio-file-input').click()">
+        <i data-lucide="paperclip"></i>
+        <span>Загрузить аудио встречи (MoM)</span>
+      </button>
+    </div>
+
+    <!-- STT Status Badge -->
+    <div id="stt-status-badge" class="stt-badge" role="status" aria-live="polite" style="display: none;"></div>
+
+    <!-- Input Bar & Voice Bar Area -->
+    <div class="input-area-wrapper">
+      <div class="input-bar" id="input-bar">
+        <!-- Hidden file input for meeting audio recording -->
+        <input type="file" id="audio-file-input" accept="audio/*,.m4a,.wav,.mp3,.ogg,.oga" style="display: none;" onchange="handleAudioUpload(this)">
+
+        <!-- Attachment button for meeting recording -->
+        <button type="button" class="btn-icon" id="attach-btn" aria-label="Загрузить аудиозапись встречи" title="Загрузить аудиозапись встречи (.m4a, .wav, .mp3, .ogg)" onclick="document.getElementById('audio-file-input').click()">
+          <i data-lucide="paperclip"></i>
+        </button>
+
+        <!-- Microphone button for voice input -->
+        <button type="button" class="btn-icon" id="mic-btn" aria-label="Голосовой ввод с микрофона" title="Голосовой ввод (Микрофон)" onclick="toggleRecording()">
+          <i data-lucide="mic"></i>
+        </button>
+
+        <label for="user-input" class="visually-hidden">Сообщение ассистенту</label>
+        <input type="text" id="user-input" placeholder="Введите ваш вопрос по производству, заказам или регламентам..." autofocus>
+        
+        <button type="button" id="send-btn" onclick="handleSend()">
+          <i data-lucide="send"></i>
+          <span>Отправить</span>
+        </button>
+      </div>
+
+      <!-- Linear / ChatGPT style Voice Bar -->
+      <div class="voice-bar" id="voice-bar" style="display: none;">
+        <button type="button" class="btn-voice-cancel" id="voice-cancel-btn" aria-label="Отменить запись аудио" title="Отменить запись (Esc)" onclick="cancelRecording()">
+          <i data-lucide="x"></i>
+          <span>Отмена</span>
+          <kbd class="kbd-chip">Esc</kbd>
+        </button>
+
+        <div class="voice-timer-badge" title="Идет запись аудио">
+          <span class="voice-rec-dot" aria-hidden="true"></span>
+          <span id="voice-timer">00:00</span>
+          <span id="record-timer" style="display: none;">00:00</span>
+        </div>
+
+        <div class="voice-waveform-container">
+          <canvas id="voice-waveform" aria-label="Индикатор уровня звука записи"></canvas>
+        </div>
+
+        <button type="button" class="btn-voice-done" id="voice-done-btn" aria-label="Остановить запись и распознать речь" title="Готово (Enter)" onclick="stopRecordingAndSend()">
+          <i data-lucide="check"></i>
+          <span>Готово</span>
+          <kbd class="kbd-chip">Enter</kbd>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================
+       LUCIDE ICONS CDN & CLIENT SCRIPT
+       ======================================================================== -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    // ------------------------------------------------------------------------
+    // Lucide Icons Helper: Initialize or Refresh Vector Icons
+    // ------------------------------------------------------------------------
+    function initLucideIcons() {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    }
+
+    const chatWindow = document.getElementById('chat-window');
+    const input = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const userSelect = document.getElementById('user-select');
+    const roleBadge = document.getElementById('role-badge');
+
+    // ------------------------------------------------------------------------
+    // RBAC & Employees State
+    // ------------------------------------------------------------------------
+    const FALLBACK_USERS = [
+      { telegram_id: 100001, full_name: 'Смирнов Алексей Сергеевич', department: 'Руководство', position: 'Генеральный директор', roles: ['Director'], permissions: ['calendar:read_meetings', 'calendar:write_meetings'] },
+      { telegram_id: 100002, full_name: 'Кузнецов Иван Петрович', department: 'Производство', position: 'Начальник производства', roles: ['Production'], permissions: ['calendar:read_meetings', 'calendar:write_meetings'] },
+      { telegram_id: 100003, full_name: 'Морозова Елена Алексеевна', department: 'Продажи', position: 'Руководитель отдела продаж', roles: ['Sales'], permissions: ['calendar:read_meetings'] },
+      { telegram_id: 100004, full_name: 'Соколова Ольга Викторовна', department: 'Бухгалтерия', position: 'Главный бухгалтер', roles: ['Accounting'], permissions: ['calendar:read_meetings'] }
+    ];
+
+    const GUEST_TEST_USER = {
+      telegram_id: 999999,
+      full_name: 'Неизвестный гость (тест 403)',
+      department: 'Внешний',
+      position: 'Без доступа',
+      roles: ['Guest'],
+      permissions: []
+    };
+
+    let availableUsers = [];
+    let currentTelegramId = Number(localStorage.getItem('fotoprint_telegram_id')) || 100001;
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getCurrentUser() {
+      return availableUsers.find(u => u.telegram_id === currentTelegramId) || availableUsers[0] || FALLBACK_USERS[0];
+    }
+
+    function updateRoleBadge(user) {
+      const role = (user.roles && user.roles[0]) ? user.roles[0] : 'Guest';
+      roleBadge.textContent = role;
+      roleBadge.className = 'role-badge';
+      if (role === 'Guest') {
+        roleBadge.classList.add('guest');
+      } else if (role !== 'Director' && role !== 'Admin') {
+        roleBadge.classList.add('restricted');
+      }
+      const permsHint = user.permissions && user.permissions.length > 0
+        ? user.permissions.join(', ')
+        : (role === 'Director' || role === 'Admin' ? 'Полный доступ' : 'Нет прав в БД');
+      roleBadge.title = `${user.full_name} (${user.position})\nПрава: ${permsHint}`;
+    }
+
+    function renderUsers(users) {
+      availableUsers = [...users, GUEST_TEST_USER];
+      userSelect.innerHTML = '';
+      for (const u of availableUsers) {
+        const opt = document.createElement('option');
+        opt.value = String(u.telegram_id);
+        const role = (u.roles && u.roles[0]) ? u.roles[0] : 'Guest';
+        opt.textContent = `${u.full_name} — ${role} (${u.telegram_id})`;
+        userSelect.appendChild(opt);
+      }
+      const exists = availableUsers.some(u => u.telegram_id === currentTelegramId);
+      if (!exists) currentTelegramId = availableUsers[0].telegram_id;
+      userSelect.value = String(currentTelegramId);
+      updateRoleBadge(getCurrentUser());
+      updateCalendarRbacUI();
+      refreshCalendarEvents();
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/agent/users');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users && data.users.length > 0) {
+            renderUsers(data.users);
+            return;
+          }
+        }
+      } catch (_) {}
+      renderUsers(FALLBACK_USERS);
+    }
+
+    function onUserChange() {
+      currentTelegramId = Number(userSelect.value);
+      localStorage.setItem('fotoprint_telegram_id', String(currentTelegramId));
+      const user = getCurrentUser();
+      updateRoleBadge(user);
+      updateCalendarRbacUI();
+
+      const notice = document.createElement('div');
+      notice.className = 'system-notice';
+      const role = (user.roles && user.roles[0]) ? user.roles[0] : 'Guest';
+      notice.innerHTML = `
+        <i data-lucide="refresh-cw"></i>
+        <span>Пользователь: ${escapeHtml(user.full_name)} (${escapeHtml(role)}, ID ${user.telegram_id})</span>
+      `;
+      chatWindow.appendChild(notice);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      refreshCalendarEvents();
+    }
+
+    // ------------------------------------------------------------------------
+    // Chat & Markdown Engine
+    // ------------------------------------------------------------------------
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+
+    function sendPrompt(text) {
+      input.value = text;
+      handleSend();
+    }
+
+    function formatMarkdown(text) {
+      const lines = String(text ?? '').split('\n');
+      const out = [];
+      let i = 0;
+
+      const inlineFmt = (s) => escapeHtml(s)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.trim().startsWith('|') && i + 1 < lines.length && /^\|[\s:-|]+\|$/.test(lines[i + 1].trim())) {
+          const headers = line.trim().slice(1, -1).split('|').map(c => c.trim());
+          i += 2;
+          const rows = [];
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            rows.push(lines[i].trim().slice(1, -1).split('|').map(c => c.trim()));
+            i++;
+          }
+          let tbl = '<div class="table-wrapper" tabindex="0" role="region" aria-label="Таблица данных"><table><thead><tr>'
+            + headers.map(h => `<th scope="col">${inlineFmt(h)}</th>`).join('')
+            + '</tr></thead><tbody>';
+          for (const r of rows) {
+            tbl += '<tr>' + r.map(c => `<td>${inlineFmt(c)}</td>`).join('') + '</tr>';
+          }
+          tbl += '</tbody></table></div>';
+          out.push(tbl);
+          continue;
+        }
+        if (/^#{2,3}\s+/.test(line)) {
+          out.push('<h3>' + inlineFmt(line.replace(/^#{2,3}\s+/, '')) + '</h3>');
+        } else if (/^- /.test(line.trim())) {
+          out.push('• ' + inlineFmt(line.trim().slice(2)) + '<br>');
+        } else if (line.trim() === '---') {
+          out.push('<hr style="border:0;border-top:1px solid var(--obsidian-border);margin:8px 0;">');
+        } else if (line.trim() === '') {
+          out.push('<br>');
+        } else {
+          out.push(inlineFmt(line) + '<br>');
+        }
+        i++;
+      }
+      return out.join('');
+    }
+
+    function appendMessage(text, role, tools = [], meta = null) {
+      const row = document.createElement('div');
+      row.className = `msg-row ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = role === 'user' ? '<i data-lucide="user"></i>' : '<i data-lucide="terminal"></i>';
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.innerHTML = formatMarkdown(text);
+
+      if (meta && meta.orchestrator === 'n8n') {
+        const n8nBadge = document.createElement('div');
+        n8nBadge.className = 'tool-badge';
+        n8nBadge.style.marginRight = '6px';
+        n8nBadge.innerHTML = `<i data-lucide="zap"></i><span>n8n ${meta.branch ? `(${escapeHtml(meta.branch)})` : ''}</span>`;
+        content.appendChild(n8nBadge);
+      }
+
+      if (tools && tools.length > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'tool-badge';
+        badge.innerHTML = `<i data-lucide="wrench"></i><span>Вызван MCP: ${escapeHtml(tools.join(', '))}</span>`;
+        content.appendChild(badge);
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(content);
+      chatWindow.appendChild(row);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function showLoading(text = '') {
+      const id = 'loading-' + Date.now();
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+      row.id = id;
+      row.innerHTML = `
+        <div class="avatar" aria-hidden="true"><i data-lucide="terminal"></i></div>
+        <div class="msg-content">
+          ${text ? `<div style="font-size: 13px; color: var(--obsidian-text-muted); margin-bottom: 6px;">${escapeHtml(text)}</div>` : ''}
+          <div class="typing" aria-label="Загрузка ответа"><span></span><span></span><span></span></div>
+        </div>
+      `;
+      chatWindow.appendChild(row);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      return id;
+    }
+
+    function removeLoading(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    let sttBadgeTimeout = null;
+    function showSttBadge(text, isError = false) {
+      const badge = document.getElementById('stt-status-badge');
+      if (!badge) return;
+      badge.textContent = text;
+      badge.style.display = 'inline-flex';
+      badge.style.borderColor = isError ? 'var(--obsidian-red)' : 'var(--obsidian-emerald)';
+      badge.style.color = isError ? '#fca5a5' : 'var(--obsidian-emerald)';
+      badge.style.background = isError ? 'var(--obsidian-red-muted)' : 'var(--obsidian-emerald-muted)';
+
+      if (sttBadgeTimeout) clearTimeout(sttBadgeTimeout);
+      if (!text.includes('Распознавание')) {
+        sttBadgeTimeout = setTimeout(() => {
+          badge.style.display = 'none';
+        }, 6000);
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Chat Message Dispatcher & ActionCard Handler
+    // ------------------------------------------------------------------------
+    async function handleSend() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendMessage(text, 'user');
+      input.value = '';
+      sendBtn.disabled = true;
+
+      const loadingId = showLoading();
+
+      try {
+        let res = await fetch('/api/agent/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Id': String(currentTelegramId)
+          },
+          body: JSON.stringify({
+            telegramId: currentTelegramId,
+            chatId: currentTelegramId,
+            message: text
+          })
+        });
+
+        // Fallback to /api/agent/execute if n8n /api/agent/chat is 404 or down
+        if (res.status === 404 || res.status === 502) {
+          res = await fetch('/api/agent/execute', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Telegram-Id': String(currentTelegramId)
+            },
+            body: JSON.stringify({
+              telegramId: currentTelegramId,
+              chatId: currentTelegramId,
+              message: text
+            })
+          });
+        }
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {}
+
+        removeLoading(loadingId);
+
+        const answerText = data ? (data.answer || data.reply) : null;
+
+        if (answerText) {
+          appendMessage(answerText, 'bot', data.tools_invoked, data);
+
+          // Handle ActionCard (slot_selection or duration_selection)
+          if (data.action_card) {
+            renderActionCard(data.action_card);
+          }
+        } else if (data && data.errorMessage) {
+          appendMessage('Ошибка: ' + data.errorMessage, 'bot');
+        } else if (!res.ok) {
+          appendMessage(`Ошибка сервера (HTTP ${res.status}).`, 'bot');
+        } else {
+          appendMessage('Не удалось получить ответ от ассистента.', 'bot');
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendMessage('Ошибка соединения со шлюзом: ' + err.message, 'bot');
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // ActionCard Rendering: Deterministic Slot Selection & Stateless Flow
+    // ------------------------------------------------------------------------
+    function renderActionCard(card) {
+      if (!card) return;
+
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = '<i data-lucide="calendar"></i>';
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.style.maxWidth = '100%';
+
+      const actionCardEl = document.createElement('div');
+      actionCardEl.className = 'action-card';
+
+      const targetPerson = card.target_person || 'Сотрудник';
+      const targetDate = card.date || 'Сегодня';
+      const duration = card.duration_minutes || 30;
+
+      // Header
+      const headerEl = document.createElement('div');
+      headerEl.className = 'action-card-header';
+      headerEl.innerHTML = `
+        <div class="action-card-title">
+          <i data-lucide="clock"></i>
+          <span>Свободные окна для встречи</span>
+        </div>
+        <div class="target-person-chip">${escapeHtml(targetPerson)} • ${escapeHtml(targetDate)}</div>
+      `;
+      actionCardEl.appendChild(headerEl);
+
+      // Duration selector buttons if provided
+      if (card.duration_buttons && card.duration_buttons.length > 0) {
+        const durSelector = document.createElement('div');
+        durSelector.className = 'chat-duration-selector';
+        card.duration_buttons.forEach(btn => {
+          const btnEl = document.createElement('button');
+          btnEl.type = 'button';
+          btnEl.className = `duration-btn ${btn.is_default || btn.minutes === duration ? 'active' : ''}`;
+          btnEl.innerHTML = `<span>${escapeHtml(btn.label || `${btn.minutes} мин`)}</span>`;
+          btnEl.onclick = () => {
+            sendPrompt(`Встреча на ${btn.minutes} минут с ${targetPerson}`);
+          };
+          durSelector.appendChild(btnEl);
+        });
+        actionCardEl.appendChild(durSelector);
+      }
+
+      // Slots container
+      if (card.slots && card.slots.length > 0) {
+        const slotsContainer = document.createElement('div');
+        slotsContainer.className = 'chat-slots-container';
+
+        card.slots.forEach(slot => {
+          const slotBtn = document.createElement('button');
+          slotBtn.type = 'button';
+          slotBtn.className = 'slot-chip';
+          slotBtn.innerHTML = `
+            <span>${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}</span>
+            <span class="slot-chip-sub">30 мин (МСК)</span>
+          `;
+          slotBtn.onclick = () => {
+            showStatelessMeetingConfirmCard(slot, card, content);
+          };
+          slotsContainer.appendChild(slotBtn);
+        });
+
+        actionCardEl.appendChild(slotsContainer);
+      } else {
+        const noSlots = document.createElement('div');
+        noSlots.style.fontSize = '12px';
+        noSlots.style.color = 'var(--obsidian-text-muted)';
+        noSlots.textContent = 'Нет доступных свободных слотов на указанный период.';
+        actionCardEl.appendChild(noSlots);
+      }
+
+      content.appendChild(actionCardEl);
+      row.appendChild(avatar);
+      row.appendChild(content);
+      chatWindow.appendChild(row);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    // ------------------------------------------------------------------------
+    // Stateless Meeting Confirmation Card (TC-05 & TC-06)
+    // ------------------------------------------------------------------------
+    function showStatelessMeetingConfirmCard(slot, card, parentContentEl) {
+      // Remove any existing temporary confirm cards in this message
+      const existing = parentContentEl.querySelector('.meeting-confirm-card');
+      if (existing) existing.remove();
+
+      const confirmCard = document.createElement('div');
+      confirmCard.className = 'meeting-confirm-card';
+
+      const user = getCurrentUser();
+      const organizerId = user.employee_id || 1;
+      const participantId = card.target_employee_id || 2;
+      const meetingTitle = `Встреча с ${card.target_person || 'коллегой'}`;
+
+      confirmCard.innerHTML = `
+        <div class="confirm-card-header">
+          <i data-lucide="clipboard-list"></i>
+          <span>Подтверждение записи в календарь</span>
+        </div>
+        <div class="confirm-card-body">
+          <div><strong>Тема:</strong> ${escapeHtml(meetingTitle)}</div>
+          <div><strong>Время:</strong> ${escapeHtml(slot.start)} – ${escapeHtml(slot.end)} (МСК, ${escapeHtml(card.date)})</div>
+          <div><strong>Участники:</strong> ${escapeHtml(user.full_name)} (Организатор), ${escapeHtml(card.target_person || 'Сотрудник')}</div>
+        </div>
+        <div class="confirm-card-actions">
+          <button type="button" class="btn-confirm-yes" onclick="submitMeetingConfirmation(this)"
+                  data-title="${escapeHtml(meetingTitle)}"
+                  data-start="${escapeHtml(slot.iso_start)}"
+                  data-end="${escapeHtml(slot.iso_end)}"
+                  data-organizer="${organizerId}"
+                  data-participants="[${participantId}]">
+            <i data-lucide="check"></i>
+            <span>Подтвердить и создать</span>
+          </button>
+          <button type="button" class="btn-confirm-no" onclick="cancelMeetingCard(this)">
+            <i data-lucide="x"></i>
+            <span>Отмена</span>
+          </button>
+        </div>
+      `;
+
+      parentContentEl.appendChild(confirmCard);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function submitMeetingConfirmation(button) {
+      const card = button.closest('.meeting-confirm-card');
+      if (!card) return;
+
+      const payload = {
+        title: button.getAttribute('data-title'),
+        start_time: button.getAttribute('data-start'),
+        end_time: button.getAttribute('data-end'),
+        organizer_id: Number(button.getAttribute('data-organizer')),
+        participant_ids: JSON.parse(button.getAttribute('data-participants') || '[]'),
+        status: 'scheduled'
+      };
+
+      button.disabled = true;
+      button.innerHTML = '<i data-lucide="loader"></i><span>Запись в календарь...</span>';
+      initLucideIcons();
+
+      try {
+        const res = await fetch('/api/calendar/confirm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Id': String(currentTelegramId)
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const startFormatted = payload.start_time ? new Date(payload.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+          
+          card.innerHTML = `
+            <div class="confirm-success-banner">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #ffffff;">
+                <i data-lucide="check-circle-2" style="color: var(--obsidian-emerald);"></i>
+                <span>Встреча успешно создана в календаре!</span>
+              </div>
+              <div class="confirm-meta">Время: ${escapeHtml(startFormatted)} (МСК) | ID: ${escapeHtml(data.meeting_id || 'сохранено')}</div>
+              <div class="notification-stub-badge">
+                <i data-lucide="bell"></i>
+                <span>Оповещение участникам: смоделировано (эмуляция Telegram / Bitrix24)</span>
+              </div>
+            </div>
+          `;
+          initLucideIcons();
+
+          // Reactive instant update of calendar events and badge (TC-09)
+          refreshCalendarEvents();
+        } else {
+          const errText = await res.text();
+          button.disabled = false;
+          button.innerHTML = '<i data-lucide="alert-triangle"></i><span>Ошибка, повторить</span>';
+          initLucideIcons();
+          console.warn('Calendar confirm error:', errText);
+        }
+      } catch (err) {
+        button.disabled = false;
+        button.innerHTML = '<i data-lucide="alert-triangle"></i><span>Ошибка сети, повторить</span>';
+        initLucideIcons();
+      }
+    }
+
+    function cancelMeetingCard(button) {
+      const card = button.closest('.meeting-confirm-card');
+      if (card) {
+        card.innerHTML = `
+          <div style="font-size: 12px; color: var(--obsidian-text-muted); display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="x-circle"></i>
+            <span>Выбор слота отменен</span>
+          </div>
+        `;
+        initLucideIcons();
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Calendar Slide-over Drawer & Month Grid Logic
+    // ------------------------------------------------------------------------
+    let currentCalendarScope = 'my';
+    let currentCalendarDate = new Date(); // Tracks viewing month
+    let selectedCalendarDateStr = null;
+    let calendarEvents = [];
+
+    function toggleCalendarDrawer() {
+      const drawer = document.getElementById('calendar-drawer');
+      const backdrop = document.getElementById('calendar-backdrop');
+      const isOpen = drawer.classList.contains('open');
+
+      if (isOpen) {
+        drawer.classList.remove('open');
+        backdrop.classList.remove('open');
+        drawer.setAttribute('aria-hidden', 'true');
+      } else {
+        drawer.classList.add('open');
+        backdrop.classList.add('open');
+        drawer.setAttribute('aria-hidden', 'false');
+        updateCalendarRbacUI();
+        refreshCalendarEvents();
+      }
+    }
+
+    function updateCalendarRbacUI() {
+      const user = getCurrentUser();
+      const isDirector = user.roles && (user.roles.includes('Director') || user.roles.includes('Admin'));
+      const scopeAllBtn = document.getElementById('scope-all-btn');
+      const lockIcon = document.getElementById('scope-lock-icon');
+
+      if (isDirector) {
+        scopeAllBtn.classList.remove('disabled');
+        scopeAllBtn.removeAttribute('disabled');
+        scopeAllBtn.title = 'Просмотр расписания всей компании';
+        lockIcon.style.display = 'none';
+      } else {
+        scopeAllBtn.classList.add('disabled');
+        scopeAllBtn.setAttribute('disabled', 'true');
+        scopeAllBtn.title = 'Доступно только руководству (роль Director)';
+        lockIcon.style.display = 'inline-flex';
+        if (currentCalendarScope === 'all') {
+          setCalendarScope('my');
+        }
+      }
+    }
+
+    function setCalendarScope(scope) {
+      if (scope === 'all') {
+        const user = getCurrentUser();
+        const isDirector = user.roles && (user.roles.includes('Director') || user.roles.includes('Admin'));
+        if (!isDirector) {
+          alert('Доступ к расписанию всей компании разрешен только руководству (роль Director).');
+          return;
+        }
+      }
+
+      currentCalendarScope = scope;
+      document.getElementById('scope-my-btn').classList.toggle('active', scope === 'my');
+      document.getElementById('scope-all-btn').classList.toggle('active', scope === 'all');
+      refreshCalendarEvents();
+    }
+
+    function changeMonth(delta) {
+      currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+      renderCalendarHeaderLabel();
+      refreshCalendarEvents();
+    }
+
+    function renderCalendarHeaderLabel() {
+      const monthLabel = document.getElementById('current-month-label');
+      const monthNames = [
+        'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+      ];
+      monthLabel.textContent = `${monthNames[currentCalendarDate.getMonth()]} ${currentCalendarDate.getFullYear()}`;
+    }
+
+    async function refreshCalendarEvents() {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      const startDate = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+      const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59)).toISOString().slice(0, 10);
+
+      const user = getCurrentUser();
+      const empId = user.employee_id || 1;
+
+      try {
+        const url = `/api/calendar/events?start_date=${startDate}&end_date=${endDate}&scope=${currentCalendarScope}&employee_id=${empId}`;
+        const res = await fetch(url, {
+          headers: {
+            'X-Telegram-Id': String(currentTelegramId)
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          calendarEvents = data.events || [];
+        } else {
+          calendarEvents = [];
+        }
+      } catch (e) {
+        console.warn('Failed to fetch calendar events:', e);
+        calendarEvents = [];
+      }
+
+      // Update today meetings count on header badge
+      updateTodayBadge();
+
+      // Render grid cells
+      renderCalendarDaysGrid();
+
+      // Render day details if selected
+      if (selectedCalendarDateStr) {
+        renderDayMeetings(selectedCalendarDateStr);
+      } else {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        selectCalendarDay(todayStr);
+      }
+    }
+
+    function updateTodayBadge() {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const count = calendarEvents.filter(e => {
+        if (!e.start_time) return false;
+        return e.start_time.slice(0, 10) === todayStr;
+      }).length;
+
+      const badge = document.getElementById('calendar-today-badge');
+      if (badge) {
+        badge.textContent = String(count);
+      }
+    }
+
+    function renderCalendarDaysGrid() {
+      const grid = document.getElementById('calendar-days-grid');
+      grid.innerHTML = '';
+
+      renderCalendarHeaderLabel();
+
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+
+      const firstDayOfMonth = new Date(year, month, 1);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+
+      // Russian week starts on Monday (Monday = 0, Sunday = 6)
+      const startDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
+      const daysInMonth = lastDayOfMonth.getDate();
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      // Previous month filler days
+      const prevMonthLastDay = new Date(year, month, 0).getDate();
+      for (let i = startDayIndex - 1; i >= 0; i--) {
+        const d = prevMonthLastDay - i;
+        const cell = document.createElement('div');
+        cell.className = 'day-cell other-month';
+        cell.innerHTML = `<span class="day-num">${d}</span>`;
+        grid.appendChild(cell);
+      }
+
+      // Current month days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        const monthStr = String(month + 1).padStart(2, '0');
+        const dayStr = String(day).padStart(2, '0');
+        const fullDateStr = `${year}-${monthStr}-${dayStr}`;
+
+        cell.className = 'day-cell';
+        if (fullDateStr === todayStr) cell.classList.add('today');
+        if (fullDateStr === selectedCalendarDateStr) cell.classList.add('selected');
+
+        // Check meetings on this day
+        const dayMeetings = calendarEvents.filter(e => e.start_time && e.start_time.slice(0, 10) === fullDateStr);
+        let dotsHtml = '';
+        if (dayMeetings.length > 0) {
+          dotsHtml = '<div class="day-dots">';
+          if (dayMeetings.length === 1) {
+            dotsHtml += '<span class="dot dot-green" title="1 встреча"></span>';
+          } else if (dayMeetings.length === 2) {
+            dotsHtml += '<span class="dot dot-green"></span><span class="dot dot-amber" title="2 встречи"></span>';
+          } else {
+            dotsHtml += '<span class="dot dot-green"></span><span class="dot dot-amber"></span><span class="dot dot-red" title="Плотное расписание"></span>';
+          }
+          dotsHtml += '</div>';
+        }
+
+        cell.innerHTML = `
+          <span class="day-num">${day}</span>
+          ${dotsHtml}
+        `;
+
+        cell.onclick = () => selectCalendarDay(fullDateStr);
+        grid.appendChild(cell);
+      }
+
+      // Next month filler days to complete grid row
+      const totalCells = startDayIndex + daysInMonth;
+      const nextMonthFiller = (7 - (totalCells % 7)) % 7;
+      for (let d = 1; d <= nextMonthFiller; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'day-cell other-month';
+        cell.innerHTML = `<span class="day-num">${d}</span>`;
+        grid.appendChild(cell);
+      }
+    }
+
+    function selectCalendarDay(dateStr) {
+      selectedCalendarDateStr = dateStr;
+
+      // Update grid selection highlights
+      document.querySelectorAll('#calendar-days-grid .day-cell').forEach(c => {
+        c.classList.remove('selected');
+      });
+
+      renderCalendarDaysGrid();
+      renderDayMeetings(dateStr);
+    }
+
+    function renderDayMeetings(dateStr) {
+      const titleEl = document.getElementById('selected-day-title');
+      const listEl = document.getElementById('day-meetings-list');
+
+      const dateObj = new Date(dateStr + 'T00:00:00');
+      const formattedDate = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+      titleEl.innerHTML = `<i data-lucide="clock"></i><span>Встречи на ${escapeHtml(formattedDate)}:</span>`;
+
+      const dayEvents = calendarEvents.filter(e => e.start_time && e.start_time.slice(0, 10) === dateStr);
+
+      if (dayEvents.length === 0) {
+        listEl.innerHTML = '<div class="empty-meetings">На эту дату встреч не запланировано.</div>';
+        initLucideIcons();
+        return;
+      }
+
+      listEl.innerHTML = '';
+      dayEvents.forEach(evt => {
+        const start = evt.start_time ? new Date(evt.start_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        const end = evt.end_time ? new Date(evt.end_time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+
+        const card = document.createElement('div');
+        card.className = 'meeting-item-card';
+        card.innerHTML = `
+          <div class="meeting-item-time">
+            <i data-lucide="clock"></i>
+            <span>${escapeHtml(start)} – ${escapeHtml(end)} (МСК)</span>
+          </div>
+          <div class="meeting-item-title">${escapeHtml(evt.title || 'Совещание')}</div>
+          ${evt.description ? `<div class="meeting-item-desc">${escapeHtml(evt.description)}</div>` : ''}
+          <div class="meeting-item-meta">
+            <i data-lucide="shield-check"></i>
+            <span>Статус: ${escapeHtml(evt.status || 'scheduled')}</span>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+
+      initLucideIcons();
+    }
+
+    // ------------------------------------------------------------------------
+    // Web Audio Recording & Equalizer Visualizer (ChatGPT / Linear style)
+    // ------------------------------------------------------------------------
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let audioContext = null;
+    let analyserNode = null;
+    let audioSourceNode = null;
+    let animFrameId = null;
+    let audioChunks = [];
+    let recordingInterval = null;
+    let recordingSeconds = 0;
+    let isRecordingCancelled = false;
+    let isConnectingMic = false;
+    let isTranscribing = false;
+
+    const NUM_WAVE_BARS = 32;
+    const smoothedHeights = new Float32Array(NUM_WAVE_BARS).fill(3.0);
+
+    // Global Hotkeys: Esc and Enter for Voice Bar and Drawer
+    document.addEventListener('keydown', (e) => {
+      const voiceBar = document.getElementById('voice-bar');
+      const drawer = document.getElementById('calendar-drawer');
+
+      if (voiceBar && voiceBar.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelRecording();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          stopRecordingAndSend();
+        }
+      } else if (e.key === 'Escape' && drawer && drawer.classList.contains('open')) {
+        e.preventDefault();
+        toggleCalendarDrawer();
+      }
+    });
+
+    function drawRoundedBar(ctx, x, y, width, height, radius) {
+      if (height < radius * 2) radius = height / 2;
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, radius);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function startWaveformVisualizer() {
+      const canvas = document.getElementById('voice-waveform');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      smoothedHeights.fill(3.0);
+      const freqData = new Uint8Array(analyserNode ? analyserNode.frequencyBinCount : 64);
+      const timeData = new Uint8Array(analyserNode ? analyserNode.fftSize : 128);
+
+      function render() {
+        const voiceBar = document.getElementById('voice-bar');
+        if (!voiceBar || voiceBar.style.display === 'none') return;
+
+        animFrameId = requestAnimationFrame(render);
+
+        let rms = 0;
+        if (analyserNode) {
+          try {
+            analyserNode.getByteFrequencyData(freqData);
+            analyserNode.getByteTimeDomainData(timeData);
+
+            let sumSquares = 0;
+            for (let i = 0; i < timeData.length; i++) {
+              const norm = (timeData[i] - 128) / 128;
+              sumSquares += norm * norm;
+            }
+            rms = Math.sqrt(sumSquares / timeData.length);
+          } catch (e) {
+            console.warn('AnalyserNode read error:', e);
+          }
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
+
+        if (cssWidth === 0 || cssHeight === 0) return;
+
+        const targetW = Math.round(cssWidth * dpr);
+        const targetH = Math.round(cssHeight * dpr);
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
+        }
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+        const now = performance.now();
+        const totalBars = NUM_WAVE_BARS;
+        const centerY = cssHeight / 2;
+
+        let barWidth = 3.5;
+        let gap = 3.5;
+        let totalWaveWidth = totalBars * barWidth + (totalBars - 1) * gap;
+        const maxWaveWidth = Math.max(0, cssWidth - 12);
+        if (totalWaveWidth > maxWaveWidth && maxWaveWidth > 0) {
+          const step = maxWaveWidth / totalBars;
+          barWidth = Math.max(2, step * 0.5);
+          gap = Math.max(1.5, step * 0.5);
+          totalWaveWidth = totalBars * barWidth + (totalBars - 1) * gap;
+        }
+
+        const startX = Math.max(0, (cssWidth - totalWaveWidth) / 2);
+
+        // Linear Obsidian Pro Waveform Gradient (Emerald -> Indigo -> Sky)
+        const grad = ctx.createLinearGradient(startX, 0, startX + totalWaveWidth, 0);
+        grad.addColorStop(0, '#10b981');
+        grad.addColorStop(0.5, '#6366f1');
+        grad.addColorStop(1, '#38bdf8');
+        ctx.fillStyle = grad;
+
+        const isSpeaking = rms > 0.018;
+
+        for (let i = 0; i < totalBars; i++) {
+          let targetHeight = 3.0;
+
+          if (isSpeaking && analyserNode) {
+            const distFromCenter = Math.abs(i - (totalBars - 1) / 2) / ((totalBars - 1) / 2);
+            const binIdx = Math.min(Math.floor((1 - distFromCenter * 0.75) * 20) + 1, freqData.length - 1);
+            const freqVal = freqData[binIdx] / 255;
+            const amplitude = Math.min(rms * 4.5, 1.0);
+
+            targetHeight = 3.0 + (freqVal * 0.6 + amplitude * 0.4) * (cssHeight - 6);
+          } else {
+            const idleWave = Math.sin(now * 0.0035 + i * 0.35) * 0.75;
+            targetHeight = 2.5 + idleWave;
+          }
+
+          smoothedHeights[i] += (targetHeight - smoothedHeights[i]) * 0.22;
+          const h = Math.max(2.5, Math.min(cssHeight - 4, smoothedHeights[i]));
+          const x = startX + i * (barWidth + gap);
+          const y = centerY - h / 2;
+
+          drawRoundedBar(ctx, x, y, barWidth, h, barWidth / 2);
+        }
+
+        ctx.restore();
+      }
+
+      render();
+    }
+
+    function cleanupAudioResources() {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        recordingInterval = null;
+      }
+      if (mediaStream) {
+        try {
+          mediaStream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+          console.warn('Error stopping media tracks:', e);
+        }
+        mediaStream = null;
+      }
+      if (audioContext && audioContext.state !== 'closed') {
+        try {
+          audioContext.close();
+        } catch (e) {
+          console.warn('Error closing audioContext:', e);
+        }
+        audioContext = null;
+      }
+      analyserNode = null;
+      audioSourceNode = null;
+    }
+
+    async function toggleRecording() {
+      if (isConnectingMic) return;
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecordingAndSend();
+      } else {
+        await startRecording();
+      }
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Ваш браузер не поддерживает запись аудио через getUserMedia.');
+        return;
+      }
+
+      const inputBar = document.getElementById('input-bar');
+      const voiceBar = document.getElementById('voice-bar');
+      const timerSpan = document.getElementById('voice-timer');
+      const legacyTimerSpan = document.getElementById('record-timer');
+
+      isConnectingMic = true;
+      isRecordingCancelled = false;
+
+      if (inputBar) inputBar.style.display = 'none';
+      if (voiceBar) voiceBar.style.display = 'flex';
+      if (timerSpan) timerSpan.textContent = '00:00';
+      if (legacyTimerSpan) legacyTimerSpan.textContent = '00:00';
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        isConnectingMic = false;
+
+        if (isRecordingCancelled) {
+          cleanupAudioResources();
+          if (voiceBar) voiceBar.style.display = 'none';
+          if (inputBar) inputBar.style.display = 'flex';
+          return;
+        }
+
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            audioContext = new AudioCtx();
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+            }
+            analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 256;
+            analyserNode.smoothingTimeConstant = 0.75;
+            audioSourceNode = audioContext.createMediaStreamSource(mediaStream);
+            audioSourceNode.connect(analyserNode);
+          }
+        } catch (audioCtxErr) {
+          console.warn('Web Audio API not supported or failed to initialize:', audioCtxErr);
+        }
+
+        let options = {};
+        if (typeof MediaRecorder.isTypeSupported === 'function') {
+          const isApple = /Macintosh|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+          if (isApple && MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+          } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            options = { mimeType: 'audio/webm;codecs=opus' };
+          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+            options = { mimeType: 'audio/webm' };
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+          }
+        }
+
+        mediaRecorder = new MediaRecorder(mediaStream, options);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = handleRecordingStop;
+        mediaRecorder.start();
+
+        recordingSeconds = 0;
+        if (timerSpan) timerSpan.textContent = '00:00';
+        if (legacyTimerSpan) legacyTimerSpan.textContent = '00:00';
+
+        if (recordingInterval) clearInterval(recordingInterval);
+        recordingInterval = setInterval(() => {
+          recordingSeconds++;
+          const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+          const secs = String(recordingSeconds % 60).padStart(2, '0');
+          const timeStr = `${mins}:${secs}`;
+          if (timerSpan) timerSpan.textContent = timeStr;
+          if (legacyTimerSpan) legacyTimerSpan.textContent = timeStr;
+        }, 1000);
+
+        startWaveformVisualizer();
+
+      } catch (err) {
+        isConnectingMic = false;
+        cleanupAudioResources();
+        if (voiceBar) voiceBar.style.display = 'none';
+        if (inputBar) inputBar.style.display = 'flex';
+        alert('Не удалось получить доступ к микрофону: ' + err.message);
+      }
+    }
+
+    function cancelRecording() {
+      isRecordingCancelled = true;
+      isConnectingMic = false;
+      cleanupAudioResources();
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+          mediaRecorder.stop();
+        } catch (e) {
+          console.warn('Error stopping mediaRecorder on cancel:', e);
+        }
+      }
+
+      const voiceBar = document.getElementById('voice-bar');
+      const inputBar = document.getElementById('input-bar');
+      if (voiceBar) voiceBar.style.display = 'none';
+      if (inputBar) inputBar.style.display = 'flex';
+      input.focus();
+    }
+
+    function stopRecordingAndSend() {
+      if (isConnectingMic) return;
+      isRecordingCancelled = false;
+      cleanupAudioResources();
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+          mediaRecorder.stop();
+        } catch (e) {
+          console.warn('Error stopping mediaRecorder on send:', e);
+        }
+      }
+
+      const voiceBar = document.getElementById('voice-bar');
+      const inputBar = document.getElementById('input-bar');
+      if (voiceBar) voiceBar.style.display = 'none';
+      if (inputBar) inputBar.style.display = 'flex';
+    }
+
+    async function handleRecordingStop() {
+      if (isRecordingCancelled) {
+        audioChunks = [];
+        return;
+      }
+
+      if (audioChunks.length === 0) {
+        input.focus();
+        return;
+      }
+
+      if (isTranscribing) return;
+      isTranscribing = true;
+
+      const mime = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+      const audioBlob = new Blob(audioChunks, { type: mime });
+      audioChunks = [];
+      const extension = mime.includes('mp4') ? 'm4a' : 'webm';
+      const audioFile = new File([audioBlob], `mic_recording.${extension}`, { type: mime });
+
+      showSttBadge('Распознавание речи...');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', audioFile);
+
+        const res = await fetch('/api/audio/transcribe?language=ru', {
+          method: 'POST',
+          body: formData
+        });
+
+        const rawText = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {}
+
+        if (res.status === 404 || res.status === 405 || res.status === 501) {
+          showSttBadge('Аудио-модуль (/api/audio/transcribe) пока не подключён на сервере.', true);
+          return;
+        }
+
+        if (!res.ok) {
+          const errMsg = (data && (data.error || data.message)) || rawText || `HTTP ${res.status}: ${res.statusText}`;
+          showSttBadge(`Ошибка (${res.status}): ${errMsg}`, true);
+          return;
+        }
+
+        if (data && data.success && data.text) {
+          const recognizedText = data.text.trim();
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          const currentVal = input.value || '';
+
+          if (currentVal.trim().length === 0) {
+            input.value = recognizedText;
+          } else if (typeof start === 'number' && typeof end === 'number' && start <= currentVal.length) {
+            const before = currentVal.substring(0, start);
+            const after = currentVal.substring(end);
+            const sepBefore = (before.length > 0 && !/\s$/.test(before)) ? ' ' : '';
+            const sepAfter = (after.length > 0 && !/^\s/.test(after)) ? ' ' : '';
+            input.value = before + sepBefore + recognizedText + sepAfter + after;
+            const newPos = (before + sepBefore + recognizedText).length;
+            input.setSelectionRange(newPos, newPos);
+          } else {
+            const sep = (!/\s$/.test(currentVal)) ? ' ' : '';
+            input.value = currentVal + sep + recognizedText;
+          }
+
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
+          const sec = data.duration_ms ? (data.duration_ms / 1000).toFixed(1) : '0.0';
+          showSttBadge(`Распознано: ${data.provider || 'local-metal'}, ${sec}s`);
+        } else {
+          const errMsg = (data && (data.error || data.message)) || 'Речь не распознана';
+          showSttBadge(`Ошибка: ${errMsg}`, true);
+        }
+      } catch (err) {
+        showSttBadge(`Ошибка сети: ${err.message}`, true);
+      } finally {
+        isTranscribing = false;
+        input.focus();
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Meeting Audio Ingestion & MoM Protocol Card
+    // ------------------------------------------------------------------------
+    async function handleAudioUpload(inputEl) {
+      if (!inputEl.files || !inputEl.files[0]) return;
+      const file = inputEl.files[0];
+      inputEl.value = '';
+
+      appendMessage(`Загружена аудиозапись встречи: **${file.name}** (${(file.size / (1024 * 1024)).toFixed(1)} МБ). Запущен цикл расшифровки и составления протокола (MoM)...`, 'user');
+
+      const loadingId = showLoading('Идет транскрибация аудио и интеллектуальный анализ протокола встречи...');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+
+        const res = await fetch('/api/meetings/process-audio?language=ru', {
+          method: 'POST',
+          body: formData
+        });
+
+        const rawText = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {}
+
+        removeLoading(loadingId);
+
+        if (res.status === 404 || res.status === 405 || res.status === 501) {
+          appendMessage('Сервис обработки аудио встреч (/api/meetings/process-audio) пока не подключён на сервере (раздел в разработке).', 'bot');
+          return;
+        }
+
+        if (res.ok && data && data.success) {
+          renderMeetingProtocolCard(data);
+        } else {
+          const errMsg = (data && (data.error || data.message)) || rawText || `HTTP ${res.status}: ${res.statusText}`;
+          appendMessage('Ошибка обработки аудиозаписи совещания: ' + errMsg, 'bot');
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendMessage('Ошибка соединения со шлюзом при загрузке аудиозаписи: ' + err.message, 'bot');
+      }
+    }
+
+    function renderMeetingProtocolCard(data) {
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = '<i data-lucide="clipboard-list"></i>';
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.style.maxWidth = '100%';
+
+      const proto = data.protocol || {};
+      const trans = data.transcription || {};
+      const meetingId = data.meeting_id || '';
+      const provider = trans.provider || 'local-metal';
+      const durationSec = trans.duration_ms ? (trans.duration_ms / 1000).toFixed(1) : '—';
+      const providerClass = provider.includes('gemini') ? 'gemini' : 'local';
+      const providerLabel = provider.includes('gemini') ? 'Gemini 1.5 Flash' : `Whisper (${provider})`;
+
+      let decisionsHtml = '';
+      if (proto.decisions && proto.decisions.length > 0) {
+        decisionsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="check-circle-2"></i><span>Принятые решения:</span></h4>
+            <ul>
+              ${proto.decisions.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let discussedHtml = '';
+      if (proto.discussed && proto.discussed.length > 0) {
+        discussedHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="message-square"></i><span>Обсуждали:</span></h4>
+            <ul>
+              ${proto.discussed.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let risksHtml = '';
+      if (proto.risks && proto.risks.length > 0) {
+        risksHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="alert-triangle"></i><span>Риски и блокеры:</span></h4>
+            <ul>
+              ${proto.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let clarificationsHtml = '';
+      if (proto.requires_clarification && proto.requires_clarification.length > 0) {
+        clarificationsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="help-circle"></i><span>Требует уточнения:</span></h4>
+            <ul>
+              ${proto.requires_clarification.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      let actionItemsHtml = '';
+      const items = data.action_items || [];
+      if (items.length > 0) {
+        actionItemsHtml = `
+          <div class="mom-section">
+            <h4><i data-lucide="pin"></i><span>Поручения (Задачи):</span></h4>
+            <div class="action-items-list">
+              ${items.map((item, idx) => `
+                <div class="action-item-card">
+                  <div class="action-item-info">
+                    <div class="action-item-title">${escapeHtml(item.title)}</div>
+                    <div class="action-item-meta">
+                      Отв.: <strong>${escapeHtml(item.responsible || 'требует уточнения')}</strong> |
+                      Срок: <strong>${escapeHtml(item.deadline || item.deadline_text || 'требует уточнения')}</strong>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-bitrix" data-action-idx="${idx}">
+                    <i data-lucide="check"></i>
+                    <span>В Битрикс24</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      const cardHtml = `
+        <div class="mom-card">
+          <div class="mom-header">
+            <div class="mom-title-row">
+              <i data-lucide="file-text" style="color: var(--obsidian-indigo);"></i>
+              <h3 class="mom-title">${escapeHtml(proto.title || 'Протокол совещания')}</h3>
+            </div>
+            <div class="mom-badges">
+              <span class="engine-badge ${providerClass}">
+                <i data-lucide="zap"></i>
+                <span>${escapeHtml(providerLabel)}</span>
+              </span>
+              <span class="duration-badge">
+                <i data-lucide="clock"></i>
+                <span>${escapeHtml(durationSec)}s</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="mom-section">
+            <h4><i data-lucide="file-check"></i><span>Резюме встречи:</span></h4>
+            <p class="mom-summary">${escapeHtml(proto.summary || 'Сводка отсутствует.')}</p>
+          </div>
+
+          ${decisionsHtml}
+          ${discussedHtml}
+          ${risksHtml}
+          ${clarificationsHtml}
+          ${actionItemsHtml}
+
+          <div class="mom-footer">
+            <button type="button" class="btn-docx-download">
+              <i data-lucide="download"></i>
+              <span>Скачать протокол .DOCX</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      content.innerHTML = cardHtml;
+
+      content.querySelectorAll('.btn-bitrix[data-action-idx]').forEach(btn => {
+        const idx = Number(btn.getAttribute('data-action-idx'));
+        const item = items[idx];
+        if (item) {
+          btn.addEventListener('click', () => createBitrixTask(item.id, item.title, btn));
+        }
+      });
+
+      const downloadBtn = content.querySelector('.btn-docx-download');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+          downloadDocx(meetingId, proto.docx_base64 || '', proto.title || 'Protocol');
+        });
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(content);
+      chatWindow.appendChild(row);
+      initLucideIcons();
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    // ------------------------------------------------------------------------
+    // Bitrix24 Task Creation via Webhook
+    // ------------------------------------------------------------------------
+    async function createBitrixTask(actionItemId, title, buttonEl) {
+      if (!buttonEl) return;
+      const originalHtml = buttonEl.innerHTML;
+      buttonEl.disabled = true;
+      buttonEl.innerHTML = '<i data-lucide="loader"></i><span>Создание...</span>';
+      initLucideIcons();
+
+      try {
+        const res = await fetch('/api/telegram/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callback_query: {
+              id: 'web_cb_' + Date.now(),
+              from: { id: currentTelegramId, first_name: getCurrentUser().full_name || 'WebUser' },
+              message: { chat: { id: currentTelegramId } },
+              data: `create_bitrix_task:${actionItemId}`
+            }
+          })
+        });
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {}
+
+        const textMsg = data && typeof data.text === 'string' ? data.text : '';
+        if (res.ok && data && data.show_alert && (textMsg.includes('успешно') || textMsg.includes('создана') || textMsg.includes('success') || textMsg.includes('\u2705'))) {
+          buttonEl.innerHTML = '<i data-lucide="check-circle-2"></i><span>Задача создана в Битрикс24</span>';
+          buttonEl.classList.add('btn-bitrix-success');
+          buttonEl.disabled = true;
+          initLucideIcons();
+        } else {
+          alert(textMsg || (res.status === 401 ? 'Вебхук защищён секретным токеном на шлюзе.' : 'Не удалось создать задачу в Битрикс24.'));
+          buttonEl.innerHTML = originalHtml;
+          buttonEl.disabled = false;
+          initLucideIcons();
+        }
+      } catch (err) {
+        alert('Ошибка сети при создании задачи: ' + err.message);
+        buttonEl.innerHTML = originalHtml;
+        buttonEl.disabled = false;
+        initLucideIcons();
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // DOCX Export Download
+    // ------------------------------------------------------------------------
+    function downloadDocx(meetingId, base64Data, title) {
+      const fileName = (title || 'Protocol') + '.docx';
+      if (base64Data && base64Data.length > 50) {
+        try {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        } catch (e) {
+          console.warn('Base64 docx download error, falling back to endpoint', e);
+        }
+      }
+      window.open(`/api/meetings/${encodeURIComponent(meetingId)}/export-docx`, '_blank');
+    }
+
+    // ------------------------------------------------------------------------
+    // Startup Initialization
+    // ------------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+      initLucideIcons();
+      loadUsers();
+    });
+
+    window.addEventListener('load', () => {
+      initLucideIcons();
+    });
+  </script>
+</body>
+</html>

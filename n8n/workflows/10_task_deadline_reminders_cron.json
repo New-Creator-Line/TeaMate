@@ -1,0 +1,147 @@
+{
+  "id": "pQ8TaskDeadlines10",
+  "name": "10_Task_Deadline_Reminders_Cron",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9-19 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Cron Hourly 09-19 MSK Weekdays",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 260],
+      "id": "node-deadline-cron"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/notifications/dispatch/task-deadlines",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Dispatch Task Deadlines (Cron)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 260],
+      "id": "node-deadline-dispatch-cron"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "manual-task-deadlines",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Manual Task Deadlines Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 480],
+      "id": "node-deadline-webhook",
+      "webhookId": "manual-task-deadlines"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/notifications/dispatch/task-deadlines",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || {}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Dispatch Task Deadlines (Manual)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 480],
+      "id": "node-deadline-dispatch-manual"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Task Deadlines Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 480],
+      "id": "node-deadline-respond"
+    }
+  ],
+  "connections": {
+    "Cron Hourly 09-19 MSK Weekdays": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Task Deadlines (Cron)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Task Deadlines Trigger": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Task Deadlines (Manual)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Task Deadlines (Manual)": {
+      "main": [
+        [
+          {
+            "node": "Return Task Deadlines Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

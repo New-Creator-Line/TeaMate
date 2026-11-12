@@ -1,0 +1,429 @@
+{
+  "id": "fotoprint-meeting-recall-rag-08",
+  "name": "08_Meeting_Recall_RAG_And_Export",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meeting-recall",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Meeting Recall Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        160,
+        300
+      ],
+      "id": "node-recall-webhook",
+      "webhookId": "meeting-recall"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst q = (b.question || b.text || '').trim();\nconst qLower = q.toLowerCase();\nconst wantsFile = Boolean(b.wants_full_transcript) ||\n  qLower.includes('весь созвон') ||\n  qLower.includes('полный созвон') ||\n  qLower.includes('полностью') ||\n  qLower.includes('стенограмм') ||\n  qLower.includes('расшифровк') ||\n  qLower.includes('файл') ||\n  qLower.includes('pdf') ||\n  qLower.includes('docx');\nconst fmt = qLower.includes('pdf') ? 'pdf' : (b.format || 'docx');\n\nreturn [{\n  json: {\n    master_id: b.master_id ? Number(b.master_id) : null,\n    telegram_id: b.telegram_id ? Number(b.telegram_id) : null,\n    question: q,\n    wants_full_transcript: wantsFile,\n    format: fmt\n  }\n}];"
+      },
+      "name": "Parse User Question & Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        300
+      ],
+      "id": "node-parse-recall"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-need-master",
+              "leftValue": "={{ !$json.master_id && Boolean($json.telegram_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Need Resolve MasterId?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        600,
+        300
+      ],
+      "id": "node-need-master"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-employee-reader:8081/tools/resolve_master_id?messenger=telegram&messenger_id={{ $json.telegram_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Resolve MasterId via EmployeeReader",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        180
+      ],
+      "id": "node-resolve-master"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse User Question & Intent').item.json;\nconst resolvedMasterId = $json.master_id || parsed.master_id;\nreturn [{\n  json: {\n    master_id: Number(resolvedMasterId),\n    question: parsed.question,\n    wants_full_transcript: parsed.wants_full_transcript,\n    format: parsed.format\n  }\n}];"
+      },
+      "name": "Merge MasterId",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        300
+      ],
+      "id": "node-merge-master"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/meetings/rag-search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ MasterId: $json.master_id, Query: $json.question, TopK: 5 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "RAG Search Meeting (gemini-embedding-2 + RBAC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        300
+      ],
+      "id": "node-rag-meet-search"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-found-meeting",
+              "leftValue": "={{ $json.found === true && Boolean($json.meeting_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Meeting Found & Accessible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1480,
+        300
+      ],
+      "id": "node-if-found"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ found: false, answer: $json.message || 'Созвон не найден или у вас нет прав доступа (доступ только у участников и директора).' }) }}",
+        "options": {}
+      },
+      "name": "Return Access Denied / Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1720,
+        460
+      ],
+      "id": "node-respond-denied"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-wants-file",
+              "leftValue": "={{ $('Merge MasterId').item.json.wants_full_transcript === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Requested Full Meeting File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        200
+      ],
+      "id": "node-if-wants-file"
+    },
+    {
+      "parameters": {
+        "url": "=http://ai-gateway:8080/api/meetings/{{ $json.meeting_id }}/export-full?master_id={{ $('Merge MasterId').item.json.master_id }}&format={{ $('Merge MasterId').item.json.format }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "meeting_file"
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Export Full Meeting File (DOCX/PDF)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        120
+      ],
+      "id": "node-export-file"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rag = $('RAG Search Meeting (gemini-embedding-2 + RBAC)').item.json;\nconst req = $('Merge MasterId').item.json;\nconst bin = $input.first().binary?.meeting_file;\nlet fileBase64 = null;\nif (bin) {\n  try {\n    const buf = await this.helpers.getBinaryDataBuffer(0, 'meeting_file');\n    fileBase64 = buf ? buf.toString('base64') : null;\n  } catch {\n    fileBase64 = (bin.data && bin.data !== 'filesystem-v2') ? bin.data : null;\n  }\n}\n\nreturn [{\n  json: {\n    found: true,\n    meeting_id: rag.meeting_id,\n    title: rag.title,\n    meeting_date: rag.meeting_date,\n    summary: rag.summary,\n    decisions: rag.decisions,\n    file_attached: Boolean(fileBase64),\n    file_name: bin?.fileName || `Meeting_${rag.meeting_id}.${req.format === 'pdf' ? 'html' : 'docx'}`,\n    file_mime_type: bin?.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n    file_base64: fileBase64,\n    answer: `📌 ${rag.title} (${rag.meeting_date})\\n\\n📝 Саммари:\\n${rag.summary}\\n\\n📎 Полная стенограмма созвона сформирована во вложенном файле.`\n  }\n}];"
+      },
+      "name": "Format Summary + File Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        120
+      ],
+      "id": "node-format-file-resp"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rag = $json;\nconst decisionsText = Array.isArray(rag.decisions) && rag.decisions.length > 0\n  ? '\\n\\n✅ Решения:\\n' + rag.decisions.map(d => `• ${d}`).join('\\n')\n  : '';\n\nreturn [{\n  json: {\n    found: true,\n    meeting_id: rag.meeting_id,\n    title: rag.title,\n    meeting_date: rag.meeting_date,\n    summary: rag.summary,\n    decisions: rag.decisions,\n    file_attached: false,\n    export_docx_url: rag.export_docx_url,\n    export_pdf_url: rag.export_pdf_url,\n    answer: `📌 ${rag.title} (${rag.meeting_date})\\n\\n📝 Саммари созвона:\\n${rag.summary}${decisionsText}\\n\\n💡 Если нужен весь созвон целиком — напишите «пришли весь созвон в docx» или «в pdf».`\n  }\n}];"
+      },
+      "name": "Format Summary Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        300
+      ],
+      "id": "node-format-summary-resp"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Meeting Recall Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2440,
+        220
+      ],
+      "id": "node-respond-recall"
+    }
+  ],
+  "connections": {
+    "Meeting Recall Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse User Question & Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse User Question & Intent": {
+      "main": [
+        [
+          {
+            "node": "Need Resolve MasterId?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Resolve MasterId?": {
+      "main": [
+        [
+          {
+            "node": "Resolve MasterId via EmployeeReader",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge MasterId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve MasterId via EmployeeReader": {
+      "main": [
+        [
+          {
+            "node": "Merge MasterId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge MasterId": {
+      "main": [
+        [
+          {
+            "node": "RAG Search Meeting (gemini-embedding-2 + RBAC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Search Meeting (gemini-embedding-2 + RBAC)": {
+      "main": [
+        [
+          {
+            "node": "Meeting Found & Accessible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting Found & Accessible?": {
+      "main": [
+        [
+          {
+            "node": "Requested Full Meeting File?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Access Denied / Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requested Full Meeting File?": {
+      "main": [
+        [
+          {
+            "node": "Export Full Meeting File (DOCX/PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Summary Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Full Meeting File (DOCX/PDF)": {
+      "main": [
+        [
+          {
+            "node": "Format Summary + File Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary + File Response": {
+      "main": [
+        [
+          {
+            "node": "Return Meeting Recall Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary Response": {
+      "main": [
+        [
+          {
+            "node": "Return Meeting Recall Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

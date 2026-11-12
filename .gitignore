@@ -1,0 +1,65 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+
+# Node.js & n8n
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment and secrets
+.env
+*.local.yaml
+*.local.json
+
+# Audio and temporary uploads
+temp/
+audio_uploads/
+*.wav
+*.mp3
+*.m4a
+*.ogg
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs and runtime PIDs
+*.log
+*.pid
+.gateway.log
+.gateway.pid
+
+# Test results and coverage
+TestResults/
+*.trx
+*.coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Локальные портативные бинарники Tsukiko и архивы
+tools/tsukiko/
+*.zip
+
+# Whisper models
+models/*.bin
+
+# AI / IDE tooling local artifacts
+.antigravity/

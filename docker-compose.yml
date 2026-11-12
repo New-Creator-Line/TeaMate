@@ -1,0 +1,533 @@
+services:
+  # =========================================================================
+  # 0. Nginx (Внешний балансировщик нагрузки и сглаживатель сетевых пиков)
+  # =========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: fotoprint-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/html:/usr/share/nginx/html:ro
+    depends_on:
+      - ai-gateway
+      - n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 1. PostgreSQL 16 + pgvector (Основная БД проекта + n8n + Langfuse)
+  # =========================================================================
+  postgres:
+    image: fotoprint-postgres:pg16
+    build:
+      context: .
+      dockerfile: infra/postgres/Dockerfile
+    container_name: fotoprint-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fotoprint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fotoprint_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-fotoprint}
+    ports:
+      # Доступен только с localhost разработчика, скрыт от публичных сканеров
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fotoprint} -d ${POSTGRES_DB:-fotoprint}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 2. n8n (Оркестрация диалогов, RAG и проактивных бизнес-сценариев)
+  # =========================================================================
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: fotoprint-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-fotoprint}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-fotoprint_secret}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: Europe/Moscow
+      TZ: Europe/Moscow
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-fotoprint-n8n-encryption-key-2026}
+      NODE_FUNCTION_ALLOW_EXTERNAL: axios,lodash,form-data
+      NODE_FUNCTION_ALLOW_BUILTIN: "crypto,url,path,buffer,util"
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      N8N_UNVERIFIED_PACKAGES_ENABLED: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_RUNNERS_TASK_TIMEOUT: "300"
+      N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: "268435456"
+      N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: "1000"
+      # Внутренние URL наших .NET 9 сервисов
+      GATEWAY_API_URL: http://ai-gateway:8080
+      MCP_EMPLOYEE_READER_URL: http://mcp-employee-reader:8081
+      MCP_1C_URL: http://mcp-1c:8082
+      MCP_BITRIX24_URL: http://mcp-bitrix24:8083
+      MCP_CALENDAR_URL: http://mcp-calendar:8084
+      MCP_KNOWLEDGE_BASE_URL: http://mcp-knowledge-base:8086
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+      - ./libraries.yaml:/app/libraries.yaml:ro
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 3. Langfuse Stack (ClickHouse + Postgres + Web UI для трейсинга и аудита)
+  # =========================================================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: fotoprint-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret}
+      CLICKHOUSE_LISTEN_HOST: "0.0.0.0"
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - ./infra/clickhouse/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fotoprint-net
+
+  langfuse-redis:
+    image: redis:7-alpine
+    container_name: fotoprint-langfuse-redis
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_AUTH:-langfuse_redis_secret}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH:-langfuse_redis_secret}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fotoprint-net
+
+  langfuse-minio:
+    image: pgsty/minio:latest
+    container_name: fotoprint-langfuse-storage
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9090" --console-address ":9091" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_secret_password}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc alias set local http://localhost:9090 ${MINIO_ROOT_USER:-minio} ${MINIO_ROOT_PASSWORD:-minio_secret_password} >/dev/null 2>&1 && mc ready local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fotoprint-net
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: fotoprint-langfuse-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fotoprint}:${POSTGRES_PASSWORD:-fotoprint_secret}@postgres:5432/langfuse
+      SALT: ${LANGFUSE_SALT:-fotoprint-langfuse-salt-secret-2026}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-7f3d9a8b2c4e6f1058a9b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6}
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: ${REDIS_AUTH:-langfuse_redis_secret}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9090
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minio_secret_password}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+    networks:
+      - fotoprint-net
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    container_name: fotoprint-langfuse-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-fotoprint-nextauth-secret-2026}
+      LANGFUSE_INIT_ORG_ID: fotoprint-org
+      LANGFUSE_INIT_ORG_NAME: Fotoprint
+      LANGFUSE_INIT_PROJECT_ID: fotoprint-ai-copilot
+      LANGFUSE_INIT_PROJECT_NAME: Fotoprint AI Copilot
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_ADMIN_EMAIL:-admin@fotoprint.ru}
+      LANGFUSE_INIT_USER_NAME: Admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_ADMIN_PASSWORD:-FotoprintAdmin2026!}
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 4. .NET 9 Сервисы (API Gateway + MCP Серверы)
+  # =========================================================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: fotoprint-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 --metrics 0.0.0.0:2000 --url http://nginx:80
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - fotoprint-net
+
+  ai-gateway:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.AiGateway.Api/Dockerfile
+    container_name: fotoprint-ai-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      N8n__WebhookBaseUrl: http://n8n:5678/webhook
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-demo-bot-token}
+      Telegram__WebhookSecret: ${TELEGRAM_WEBHOOK_SECRET:-fotoprint-telegram-webhook-secret-2026}
+      Telegram__CloudflaredMetricsUrl: http://cloudflared:2000/quicktunnel
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/interactions}
+      LLM_MODEL: ${LLM_MODEL:-gemma-4-31b-it}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemma-4-31b-it}
+      AUDIO_ENGINE_PATH: /usr/local/bin/whisper-cli
+      WHISPER_MODEL_PATH: /app/models/ggml-base.bin
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+      McpUrls__EmployeeReader: http://mcp-employee-reader:8081
+      McpUrls__OneC: http://mcp-1c:8082
+      McpUrls__Bitrix24: http://mcp-bitrix24:8083
+      McpUrls__Calendar: http://mcp-calendar:8084
+      McpUrls__KnowledgeBase: http://mcp-knowledge-base:8086
+    ports:
+      # Доступен только с localhost разработчика, публичный доступ идет строго через Nginx
+      - "127.0.0.1:${GATEWAY_PORT:-8088}:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./config/vocabulary.yaml:/app/config/vocabulary.yaml:ro
+      - ./models:/app/models:ro
+    networks:
+      - fotoprint-net
+
+  mcp-employee-reader:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.Mcp.EmployeeReader/Dockerfile
+    container_name: fotoprint-mcp-employee-reader
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: http://+:8081
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+    # Порты MCP закрыты от внешних сканеров, доступны только внутри fotoprint-net
+    networks:
+      - fotoprint-net
+
+  mcp-1c:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.Mcp.OneC/Dockerfile
+    container_name: fotoprint-mcp-1c
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mcp-employee-reader:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:8082
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      Security__EmployeeReaderUrl: http://mcp-employee-reader:8081
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+    # Порты MCP закрыты от внешних сканеров, доступны только внутри fotoprint-net
+    networks:
+      - fotoprint-net
+
+  mcp-bitrix24:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.Mcp.Bitrix24/Dockerfile
+    container_name: fotoprint-mcp-bitrix24
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mcp-employee-reader:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:8083
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      Security__EmployeeReaderUrl: http://mcp-employee-reader:8081
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+    # Порты MCP закрыты от внешних сканеров, доступны только внутри fotoprint-net
+    networks:
+      - fotoprint-net
+
+  mcp-calendar:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.Mcp.Calendar/Dockerfile
+    container_name: fotoprint-mcp-calendar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mcp-employee-reader:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:8084
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      Security__EmployeeReaderUrl: http://mcp-employee-reader:8081
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+    ports:
+      - "127.0.0.1:8084:8084"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    networks:
+      - fotoprint-net
+
+  mcp-knowledge-base:
+    build:
+      context: .
+      dockerfile: src/Fotoprint.Mcp.KnowledgeBase/Dockerfile
+    container_name: fotoprint-mcp-knowledge-base
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mcp-employee-reader:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:8086
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-fotoprint};Username=${POSTGRES_USER:-fotoprint};Password=${POSTGRES_PASSWORD:-fotoprint_secret}
+      Security__EmployeeReaderUrl: http://mcp-employee-reader:8081
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      Langfuse__BaseUrl: http://langfuse-web:3000
+      Langfuse__PublicKey: ${LANGFUSE_PUBLIC_KEY:-pk-lf-fotoprint-local}
+      Langfuse__SecretKey: ${LANGFUSE_SECRET_KEY:-sk-lf-fotoprint-local}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    # Порты MCP закрыты от внешних сканеров, доступны только внутри fotoprint-net
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 5. Готовый внешний MCP-сервер Битрикс24 (Опциональный готовый коннектор)
+  # =========================================================================
+  bitrix24-ready-mcp:
+    image: bit2beat/bitrix24-mcp:latest
+    container_name: fotoprint-bitrix24-ready-mcp
+    restart: unless-stopped
+    profiles:
+      - optional
+    environment:
+      BITRIX24_WEBHOOK_URL: ${BITRIX24_WEBHOOK_URL:-https://fotoprint.bitrix24.ru/rest/1/webhook-key/}
+      PORT: "8085"
+    # Закрыт от внешних сканеров
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 6. Автоматический загрузчик и кэшер библиотек (libraries.yaml)
+  # =========================================================================
+  library-downloader:
+    image: mcr.microsoft.com/dotnet/sdk:9.0-alpine
+    container_name: fotoprint-library-downloader
+    restart: "no"
+    volumes:
+      - .:/app
+      - nuget_cache:/root/.nuget/packages
+      - n8n_data:/home/node/.n8n
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/app/infra/scripts/bootstrap.sh"]
+    networks:
+      - fotoprint-net
+
+  # =========================================================================
+  # 7. Observability Stack (Loki + Grafana Alloy + Grafana + ClickHouse)
+  # =========================================================================
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: fotoprint-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fotoprint-net
+
+  alloy:
+    image: grafana/alloy:v1.7.5
+    container_name: fotoprint-alloy
+    restart: unless-stopped
+    command: run --server.http.listen-addr=127.0.0.1:12345 /etc/alloy/config.alloy
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./infra/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - fotoprint-net
+
+  clickhouse-loki-sync:
+    image: python:3.12-alpine
+    container_name: fotoprint-clickhouse-loki-sync
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret}
+      LOKI_URL: http://loki:3100/loki/api/v1/push
+      POLL_INTERVAL_SECONDS: "10"
+      BACKFILL_HOURS: "168"
+    volumes:
+      - ./infra/observability:/app:ro
+    command: ["python", "/app/clickhouse_to_loki.py"]
+    networks:
+      - fotoprint-net
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: fotoprint-grafana
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-FotoprintGrafana2026!}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: vertamedia-clickhouse-datasource
+      POSTGRES_USER: ${POSTGRES_USER:-fotoprint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fotoprint_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-fotoprint}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/plugins:/var/lib/grafana/plugins:ro
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - fotoprint-net
+
+volumes:
+  pgdata:
+  n8n_data:
+  clickhouse_data:
+  clickhouse_logs:
+  minio_data:
+  nuget_cache:
+  loki_data:
+  grafana_data:
+
+networks:
+  fotoprint-net:
+    driver: bridge
+

@@ -1,0 +1,338 @@
+{
+  "id": "fotoprint-google-meet-post-07",
+  "name": "07_Google_Meet_Post_Processing",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "google-meet-ended",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Google Meet Ended Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [160, 300],
+      "id": "node-meet-webhook",
+      "webhookId": "google-meet-ended"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "name": "Calendar Poll Every 10m",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [160, 520],
+      "id": "node-meet-cron"
+    },
+    {
+      "parameters": {
+        "url": "http://mcp-calendar:8084/tools/get_upcoming_meetings?time_window_minutes=15",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Telegram-Id",
+              "value": "100001"
+            },
+            {
+              "name": "X-Internal-Service-Key",
+              "value": "fotoprint-internal-service-secret-token-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Fetch Ended Calendar Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 520],
+      "id": "node-fetch-cal"
+    },
+    {
+      "parameters": {
+        "jsCode": "const list = Array.isArray($json) ? $json : [];\nconst withRecordings = list.filter(m => m.recording_url && m.status === 'ended');\nreturn withRecordings.map(m => ({\n  json: {\n    body: {\n      title: m.title,\n      calendar_event_id: m.calendar_event_id || m.meeting_id,\n      start_time: m.start_time,\n      end_time: m.end_time,\n      organizer_email: m.organizer_email || '',\n      participant_emails: m.participant_emails || [],\n      participant_master_ids: m.participant_master_ids || [],\n      recording_url: m.recording_url\n    }\n  }\n}));"
+      },
+      "name": "Filter Ended Google Meets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 520],
+      "id": "node-filter-ended"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nconst body = input.json.body || input.json || {};\nconst hasBinary = Boolean(input.binary && (input.binary.file || input.binary.data));\n\nreturn [{\n  json: {\n    title: body.title || 'Созвон Google Meet',\n    calendar_event_id: body.calendar_event_id || '',\n    start_time: body.start_time || new Date().toISOString(),\n    end_time: body.end_time || new Date().toISOString(),\n    organizer_master_id: body.organizer_master_id || null,\n    organizer_email: body.organizer_email || '',\n    participant_master_ids: Array.isArray(body.participant_master_ids) ? body.participant_master_ids : [],\n    participant_emails: Array.isArray(body.participant_emails) ? body.participant_emails : [],\n    recording_url: body.recording_url || '',\n    audio_base64: body.audio_base64 || '',\n    file_name: body.file_name || 'google_meet_recording.m4a',\n    has_binary: hasBinary\n  },\n  binary: input.binary || {}\n}];"
+      },
+      "name": "Normalize Meet Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300],
+      "id": "node-norm-meta"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "cond-has-url",
+              "leftValue": "={{ !$json.has_binary && Boolean($json.recording_url) }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Needs Recording Download?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [640, 300],
+      "id": "node-if-download"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.recording_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "file"
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Download Meet Recording",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 180],
+      "id": "node-download-rec"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst meta = $('Normalize Meet Metadata').item.json;\n\nif (item.binary && (item.binary.file || item.binary.data)) {\n  const bin = item.binary.file || item.binary.data;\n  return [{ json: meta, binary: { file: bin } }];\n}\n\nif (meta.audio_base64) {\n  const buf = Buffer.from(meta.audio_base64, 'base64');\n  const prepared = await this.helpers.prepareBinaryData(buf, meta.file_name || 'google_meet_recording.m4a', 'audio/mp4');\n  return [{ json: meta, binary: { file: prepared } }];\n}\n\nthrow new Error('Не передан аудиофайл, audio_base64 или recording_url записи созвона.');"
+      },
+      "name": "Prepare Audio Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "id": "node-prep-binary"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/audio/transcribe?language=ru",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "name": "Whisper Transcribe (STT)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 300],
+      "id": "node-whisper-stt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const stt = $json || {};\nif (stt.success === false || !String(stt.text || '').trim()) {\n  throw new Error('STT failed or empty transcript: ' + (stt.error || 'empty text'));\n}\nreturn [{ json: stt }];"
+      },
+      "name": "Validate STT Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1480, 300],
+      "id": "node-validate-stt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/llm/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ SystemInstruction: 'Ты ИИ-секретарь. Сформируй строго валидный JSON без markdown-обертки: {\"title\":\"...\",\"summary\":\"подробное саммари 3-6 предложений\",\"decisions\":[\"...\"],\"action_items\":[{\"title\":\"...\",\"description\":\"...\",\"responsible\":\"ФИО или требует уточнения\",\"deadline\":null}]}. Не выдумывай факты.', Prompt: 'Тема созвона: ' + $('Normalize Meet Metadata').item.json.title + '\\n\\nСтенограмма Whisper:\\n' + ($json.text || ''), Temperature: 0.1, MaxOutputTokens: 2048, TraceName: 'google-meet-llm-summarize', SessionId: $('Normalize Meet Metadata').item.json.calendar_event_id ? ('meeting-' + $('Normalize Meet Metadata').item.json.calendar_event_id) : null, UserId: $('Normalize Meet Metadata').item.json.organizer_master_id ? String($('Normalize Meet Metadata').item.json.organizer_master_id) : null }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "name": "LLM Summarize Meeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 300],
+      "id": "node-llm-summarize"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Normalize Meet Metadata').item.json;\nconst stt = $('Whisper Transcribe (STT)').item.json;\nconst rawLlmText = $json.response?.text || $json.response?.Text || '';\n\nlet parsed = null;\ntry {\n  const start = rawLlmText.indexOf('{');\n  const end = rawLlmText.lastIndexOf('}');\n  if (start >= 0 && end > start) {\n    parsed = JSON.parse(rawLlmText.slice(start, end + 1));\n  }\n} catch {\n  parsed = null;\n}\n\nconst transcript = stt.text || '';\nconst summary = parsed?.summary || rawLlmText || transcript.slice(0, 600);\nconst title = parsed?.title || meta.title;\nconst decisions = Array.isArray(parsed?.decisions) ? parsed.decisions : [];\nconst actionItems = Array.isArray(parsed?.action_items) ? parsed.action_items : [];\n\nreturn [{\n  json: {\n    title,\n    calendar_event_id: meta.calendar_event_id || null,\n    start_time: meta.start_time,\n    end_time: meta.end_time,\n    organizer_master_id: meta.organizer_master_id,\n    organizer_email: meta.organizer_email || null,\n    participant_master_ids: meta.participant_master_ids,\n    participant_emails: meta.participant_emails,\n    raw_transcript: transcript,\n    summary,\n    decisions,\n    action_items: actionItems\n  }\n}];"
+      },
+      "name": "Build Meeting DB & RAG Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, 300],
+      "id": "node-build-save-payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-gateway:8080/api/meetings/save-and-index",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ Title: $json.title, CalendarEventId: $json.calendar_event_id, StartTime: $json.start_time, EndTime: $json.end_time, OrganizerMasterId: $json.organizer_master_id, OrganizerEmail: $json.organizer_email, ParticipantMasterIds: $json.participant_master_ids, ParticipantEmails: $json.participant_emails, RawTranscript: $json.raw_transcript, Summary: $json.summary, Decisions: $json.decisions, ActionItems: $json.action_items }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "name": "Save to DB & Index RAG (RBAC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2080, 300],
+      "id": "node-save-and-index"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Return Meet Processing Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2320, 300],
+      "id": "node-respond-meet"
+    }
+  ],
+  "connections": {
+    "Google Meet Ended Webhook": {
+      "main": [
+        [
+          { "node": "Normalize Meet Metadata", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Calendar Poll Every 10m": {
+      "main": [
+        [
+          { "node": "Fetch Ended Calendar Events", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Ended Calendar Events": {
+      "main": [
+        [
+          { "node": "Filter Ended Google Meets", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Filter Ended Google Meets": {
+      "main": [
+        [
+          { "node": "Normalize Meet Metadata", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Normalize Meet Metadata": {
+      "main": [
+        [
+          { "node": "Needs Recording Download?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Needs Recording Download?": {
+      "main": [
+        [
+          { "node": "Download Meet Recording", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Prepare Audio Binary", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Download Meet Recording": {
+      "main": [
+        [
+          { "node": "Prepare Audio Binary", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Prepare Audio Binary": {
+      "main": [
+        [
+          { "node": "Whisper Transcribe (STT)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Whisper Transcribe (STT)": {
+      "main": [
+        [
+          { "node": "Validate STT Transcript", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate STT Transcript": {
+      "main": [
+        [
+          { "node": "LLM Summarize Meeting", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "LLM Summarize Meeting": {
+      "main": [
+        [
+          { "node": "Build Meeting DB & RAG Payload", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Meeting DB & RAG Payload": {
+      "main": [
+        [
+          { "node": "Save to DB & Index RAG (RBAC)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save to DB & Index RAG (RBAC)": {
+      "main": [
+        [
+          { "node": "Return Meet Processing Result", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
+
